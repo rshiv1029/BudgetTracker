@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 
 from app.database import init_db
-from app.routers import transactions, budgets, net_worth, ai, plaid
+from app.routers import transactions, budgets, net_worth, ai, plaid, recurring
 
 app = FastAPI(title="Finance App", version="1.0.0")
 
@@ -19,6 +19,7 @@ app.include_router(budgets.router)
 app.include_router(net_worth.router)
 app.include_router(ai.router)
 app.include_router(plaid.router)
+app.include_router(recurring.router)
 
 # Static files
 STATIC_DIR = Path(__file__).parent / "static"
@@ -27,7 +28,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.on_event("startup")
 def startup():
-    # Ensure data/ and uploads/ dirs exist
     os.makedirs("data", exist_ok=True)
     os.makedirs("uploads", exist_ok=True)
     init_db()

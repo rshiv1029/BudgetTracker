@@ -3,1055 +3,2383 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Finance App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Finance — Personal Budget Tracker</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
     ></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-    <link rel="stylesheet" href="/static/style.css" />
   </head>
-  <body class="bg-gray-50 min-h-screen text-gray-800" x-data="financeApp()">
-    <!-- Navigation -->
-    <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
-      <div class="max-w-7xl mx-auto px-4 py-2 flex items-center gap-2">
-        <span class="font-bold text-blue-700 text-lg mr-4">Finance</span>
-        <button
-          class="nav-link"
-          :class="page==='dashboard' && 'active'"
-          @click="navigate('dashboard')"
-        >
-          Dashboard
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='transactions' && 'active'"
-          @click="navigate('transactions')"
-        >
-          Transactions
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='accounts' && 'active'"
-          @click="navigate('accounts')"
-        >
-          Accounts
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='import' && 'active'"
-          @click="navigate('import')"
-        >
-          Import CSV
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='budgets' && 'active'"
-          @click="navigate('budgets')"
-        >
-          Budgets
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='networth' && 'active'"
-          @click="navigate('networth')"
-        >
-          Net Worth
-        </button>
-        <button
-          class="nav-link"
-          :class="page==='ai' && 'active'"
-          @click="navigate('ai')"
-        >
-          Ask AI
-        </button>
-      </div>
-    </nav>
-
-    <main class="max-w-7xl mx-auto px-4 py-6">
-      <!-- ── DASHBOARD ───────────────────────────────────────────────────── -->
-      <div
-        x-show="page==='dashboard'"
-        x-data="dashboardApp()"
-        x-init="init()"
-        x-cloak
-      >
-        <h1 class="text-2xl font-bold mb-5">Dashboard</h1>
-
-        <!-- Loading -->
-        <div x-show="loading" class="text-gray-400 text-sm">Loading...</div>
-
-        <div x-show="!loading">
-          <!-- Summary cards -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div class="card">
-              <div class="text-xs text-gray-500 mb-1">Income This Month</div>
-              <div
-                class="text-2xl font-semibold amount-income"
-                x-text="fmtAbs(totalIncome)"
-              ></div>
-            </div>
-            <div class="card">
-              <div class="text-xs text-gray-500 mb-1">Expenses This Month</div>
-              <div
-                class="text-2xl font-semibold amount-expense"
-                x-text="fmtAbs(totalExpenses)"
-              ></div>
-            </div>
-            <div class="card">
-              <div class="text-xs text-gray-500 mb-1">Net This Month</div>
-              <div
-                class="text-2xl font-semibold"
-                :class="netThisMonth >= 0 ? 'amount-income' : 'amount-expense'"
-                x-text="fmt(netThisMonth)"
-              ></div>
-            </div>
-          </div>
-
-          <!-- Charts row -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <div class="card">
-              <h2 class="text-sm font-semibold text-gray-600 mb-3">
-                Spending by Category (this month)
-              </h2>
-              <canvas id="catPieChart" height="200"></canvas>
-            </div>
-            <div class="card">
-              <h2 class="text-sm font-semibold text-gray-600 mb-3">
-                Income vs Expenses (last 3 months)
-              </h2>
-              <canvas id="incomeBarChart" height="200"></canvas>
-            </div>
-          </div>
-
-          <!-- Budget alerts -->
-          <div class="card mb-6" x-show="budgetStatus.length">
-            <h2 class="text-sm font-semibold text-gray-600 mb-3">
-              Budget Status
-            </h2>
-            <div class="space-y-3">
-              <template x-for="b in budgetStatus" :key="b.category">
-                <div>
-                  <div class="flex justify-between text-sm mb-1">
-                    <span x-text="b.category" class="font-medium"></span>
-                    <span>
-                      <span x-text="fmtAbs(b.actual_amount)"></span>
-                      <span class="text-gray-400"> / </span>
-                      <span x-text="fmtAbs(b.limit_amount)"></span>
-                      <span
-                        class="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
-                        :class="statusClass(b.status)"
-                        x-text="b.status.toUpperCase()"
-                      ></span>
-                    </span>
-                  </div>
-                  <div class="bg-gray-100 rounded-full h-2">
-                    <div
-                      class="h-2 rounded-full transition-all"
-                      :class="barClass(b.status)"
-                      :style="`width: ${barWidth(b.pct_used)}`"
-                    ></div>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          <!-- Top merchants -->
-          <div class="card" x-show="insights && insights.top_merchants.length">
-            <h2 class="text-sm font-semibold text-gray-600 mb-3">
-              Top Merchants This Month
-            </h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Merchant</th>
-                    <th>Category</th>
-                    <th>Total</th>
-                    <th>Transactions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template
-                    x-for="m in (insights ? insights.top_merchants : [])"
-                    :key="m.merchant"
-                  >
-                    <tr>
-                      <td x-text="m.merchant || '—'"></td>
-                      <td x-text="m.category"></td>
-                      <td class="amount-expense" x-text="fmtAbs(m.total)"></td>
-                      <td x-text="m.count"></td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── TRANSACTIONS ─────────────────────────────────────────────────── -->
-      <div
-        x-show="page==='transactions'"
-        x-data="transactionsApp()"
-        x-init="init()"
-        x-cloak
-      >
-        <div class="flex items-center justify-between mb-5">
-          <h1 class="text-2xl font-bold">Transactions</h1>
-          <div class="flex gap-2 text-sm">
-            <span
-              class="amount-income font-medium"
-              x-text="'+ ' + fmtAbs(totalIncome)"
-            ></span>
-            <span class="text-gray-400">/</span>
-            <span
-              class="amount-expense font-medium"
-              x-text="'- ' + fmtAbs(totalExpenses)"
-            ></span>
+  <body x-data="financeApp()">
+    <div class="app-shell">
+      <!-- ══════════════════════════════════════════════════════════════
+       SIDEBAR
+  ══════════════════════════════════════════════════════════════════ -->
+      <nav class="sidebar">
+        <div class="sidebar-logo">
+          <div class="sidebar-logo-mark">💰</div>
+          <div>
+            <div class="sidebar-logo-text">Finance</div>
+            <div class="sidebar-logo-sub">Personal Tracker</div>
           </div>
         </div>
 
-        <!-- Filters -->
-        <div class="card mb-4 flex flex-wrap gap-3 items-end">
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Month</label>
-            <input
-              type="month"
-              x-model="filters.month_year"
-              @change="load()"
-              class="border rounded px-2 py-1 text-sm"
-            />
-          </div>
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Category</label>
-            <select
-              x-model="filters.category"
-              @change="load()"
-              class="border rounded px-2 py-1 text-sm"
-            >
-              <option value="">All categories</option>
-              <template x-for="c in categories" :key="c.name">
-                <option :value="c.name" x-text="c.name"></option>
-              </template>
-            </select>
-          </div>
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Search</label>
-            <input
-              type="text"
-              x-model="filters.search"
-              @keyup.enter="load()"
-              placeholder="Merchant or description"
-              class="border rounded px-2 py-1 text-sm w-48"
-            />
-          </div>
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Overview</div>
           <button
-            @click="load()"
-            class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700"
+            class="nav-item"
+            :class="page==='dashboard' && 'active'"
+            @click="navigate('dashboard')"
           >
-            Search
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+              />
+            </svg>
+            Dashboard
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='transactions' && 'active'"
+            @click="navigate('transactions')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm3 5a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm0 3a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Transactions
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='budgets' && 'active'"
+            @click="navigate('budgets')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"
+              />
+            </svg>
+            Budgets
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='networth' && 'active'"
+            @click="navigate('networth')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Net Worth
           </button>
         </div>
 
-        <div class="card">
-          <div x-show="loading" class="text-gray-400 text-sm py-4">
-            Loading...
-          </div>
-          <div class="table-wrap" x-show="!loading">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Merchant</th>
-                  <th>Category</th>
-                  <th class="text-right">Amount</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="txn in transactions" :key="txn.id">
-                  <tr>
-                    <td
-                      class="text-gray-500 text-sm whitespace-nowrap"
-                      x-text="txn.date"
-                    ></td>
-                    <td
-                      class="max-w-xs truncate text-sm"
-                      x-text="txn.description"
-                      :title="txn.description"
-                    ></td>
-                    <td class="text-sm" x-text="txn.merchant_clean || '—'"></td>
-                    <td>
-                      <template x-if="editingId !== txn.id">
-                        <span
-                          class="text-sm px-2 py-0.5 bg-gray-100 rounded cursor-pointer hover:bg-blue-50"
-                          x-text="txn.category"
-                          @click="startEdit(txn)"
-                        ></span>
-                      </template>
-                      <template x-if="editingId === txn.id">
-                        <div class="flex gap-1 items-center">
-                          <select
-                            x-model="editCategory"
-                            class="border rounded px-1 py-0.5 text-sm"
-                          >
-                            <template x-for="c in categories" :key="c.name">
-                              <option :value="c.name" x-text="c.name"></option>
-                            </template>
-                          </select>
-                          <button
-                            @click="saveEdit(txn)"
-                            class="text-xs text-green-700 hover:text-green-900 font-medium"
-                          >
-                            Save
-                          </button>
-                          <button
-                            @click="cancelEdit()"
-                            class="text-xs text-gray-500 hover:text-gray-700"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </template>
-                    </td>
-                    <td
-                      class="text-right font-mono text-sm"
-                      :class="amountClass(txn.amount)"
-                      x-text="fmt(txn.amount)"
-                    ></td>
-                    <td></td>
-                  </tr>
-                </template>
-                <tr x-show="!transactions.length">
-                  <td colspan="6" class="text-center text-gray-400 py-8">
-                    No transactions found
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── ACCOUNTS (PLAID) ────────────────────────────────────────────── -->
-      <div
-        x-show="page==='accounts'"
-        x-data="accountsApp()"
-        x-init="init()"
-        x-cloak
-      >
-        <div class="flex items-center justify-between mb-5">
-          <h1 class="text-2xl font-bold">Connected Accounts</h1>
-          <div class="flex gap-2">
-            <button
-              x-show="items.length > 0"
-              @click="syncAll()"
-              :disabled="syncing"
-              class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-200 disabled:opacity-50"
-            >
-              <span x-show="!syncing">Sync All</span>
-              <span x-show="syncing">Syncing...</span>
-            </button>
-            <button
-              @click="connectBank()"
-              :disabled="syncing"
-              class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              + Connect Bank
-            </button>
-          </div>
-        </div>
-
-        <!-- Plaid not configured warning -->
-        <div
-          x-show="status && !status.configured"
-          class="card mb-4 border border-yellow-200 bg-yellow-50"
-        >
-          <p class="text-sm font-medium text-yellow-800 mb-1">
-            Plaid not configured
-          </p>
-          <p class="text-sm text-yellow-700">
-            Add your keys to
-            <code class="bg-yellow-100 px-1 rounded">.env</code> to enable bank
-            connections:
-          </p>
-          <pre class="mt-2 text-xs bg-yellow-100 rounded p-2 text-yellow-900">
-PLAID_CLIENT_ID=your_client_id
-PLAID_SECRET=your_secret
-PLAID_ENV=sandbox</pre
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Connect</div>
+          <button
+            class="nav-item"
+            :class="page==='accounts' && 'active'"
+            @click="navigate('accounts')"
           >
-          <p class="text-xs text-yellow-600 mt-2">
-            Get free keys at <strong>dashboard.plaid.com</strong> → Team
-            Settings → Keys
-          </p>
-        </div>
-
-        <!-- Error -->
-        <div x-show="error" class="card mb-4 border border-red-200 bg-red-50">
-          <p class="text-sm text-red-700" x-text="error"></p>
-        </div>
-
-        <!-- Sync results -->
-        <div
-          x-show="syncResults && syncResults.length"
-          class="card mb-4 border border-green-200 bg-green-50"
-        >
-          <p class="text-sm font-medium text-green-800 mb-2">Sync complete</p>
-          <template x-for="r in (syncResults || [])" :key="r.institution_name">
-            <div class="text-sm text-green-700">
-              <span x-text="r.institution_name" class="font-medium"></span>:
-              <span x-text="r.imported + ' new'"></span>,
-              <span x-text="r.duplicates + ' duplicates'"></span>,
-              <span x-text="r.accounts_synced + ' accounts'"></span>
-            </div>
-          </template>
-        </div>
-
-        <!-- Connected institutions -->
-        <div x-show="items.length > 0" class="card mb-6">
-          <h2 class="text-sm font-semibold text-gray-600 mb-3">
-            Connected Institutions
-          </h2>
-          <div class="divide-y divide-gray-100">
-            <template x-for="item in items" :key="item.id">
-              <div class="py-3 flex items-center justify-between">
-                <div>
-                  <p
-                    class="font-medium text-sm"
-                    x-text="item.institution_name"
-                  ></p>
-                  <p
-                    class="text-xs text-gray-400"
-                    x-text="item.last_synced ? 'Last synced: ' + item.last_synced.slice(0,16).replace('T',' ') : 'Never synced'"
-                  ></p>
-                </div>
-                <div class="flex gap-2">
-                  <button
-                    @click="syncOne(item.id)"
-                    :disabled="syncing"
-                    class="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-40"
-                  >
-                    Sync
-                  </button>
-                  <button
-                    @click="disconnect(item.id, item.institution_name)"
-                    class="text-xs text-red-500 hover:text-red-700"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- Empty state -->
-        <div
-          x-show="items.length === 0 && status && status.configured"
-          class="text-center py-16 text-gray-400"
-        >
-          <p class="text-lg mb-2">No accounts connected yet</p>
-          <p class="text-sm mb-6">
-            Click <strong class="text-gray-600">+ Connect Bank</strong> to link
-            your first institution
-          </p>
-          <p class="text-xs">
-            Supports: SoFi, Schwab, Fidelity, DCU, Robinhood, Chase, Amex, Bilt,
-            Discover, and thousands more
-          </p>
-        </div>
-      </div>
-
-      <!-- ── IMPORT ──────────────────────────────────────────────────────── -->
-      <div x-show="page==='import'" x-data="importApp()" x-cloak>
-        <h1 class="text-2xl font-bold mb-5">Import CSV</h1>
-
-        <div class="card max-w-lg">
-          <div class="space-y-4">
-            <div>
-              <label class="text-sm font-medium block mb-1"
-                >Bank / Profile</label
-              >
-              <select
-                x-model="form.bank_profile"
-                class="border rounded px-3 py-2 text-sm w-full"
-              >
-                <option value="sofi">SoFi</option>
-                <option value="generic">
-                  Generic (Date, Description, Amount)
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="text-sm font-medium block mb-1"
-                >Account Name <span class="text-red-500">*</span></label
-              >
-              <input
-                type="text"
-                x-model="form.account_name"
-                placeholder="e.g. SoFi Checking"
-                class="border rounded px-3 py-2 text-sm w-full"
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+              <path
+                fill-rule="evenodd"
+                d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"
+                clip-rule="evenodd"
               />
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="text-sm font-medium block mb-1"
-                  >Account Type</label
-                >
-                <select
-                  x-model="form.account_type"
-                  class="border rounded px-3 py-2 text-sm w-full"
-                >
-                  <option value="checking">Checking</option>
-                  <option value="savings">Savings</option>
-                  <option value="credit">Credit Card</option>
-                  <option value="investment">Investment</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-sm font-medium block mb-1"
-                  >Institution</label
-                >
-                <input
-                  type="text"
-                  x-model="form.institution"
-                  placeholder="e.g. SoFi"
-                  class="border rounded px-3 py-2 text-sm w-full"
-                />
-              </div>
-            </div>
-            <div>
-              <label class="text-sm font-medium block mb-1"
-                >CSV File <span class="text-red-500">*</span></label
-              >
-              <input
-                type="file"
-                accept=".csv"
-                @change="handleFile($event)"
-                class="text-sm w-full"
-              />
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="runAi"
-                x-model="form.run_ai"
-                class="rounded"
-              />
-              <label for="runAi" class="text-sm"
-                >Auto-categorize with AI after import</label
-              >
-            </div>
-            <button
-              @click="submit()"
-              :disabled="loading"
-              class="w-full bg-blue-600 text-white py-2 rounded font-medium text-sm hover:bg-blue-700 disabled:opacity-50"
-            >
-              <span x-show="!loading">Import</span>
-              <span x-show="loading">Importing & categorizing...</span>
-            </button>
-          </div>
-
-          <!-- Result -->
-          <div
-            x-show="result"
-            class="mt-4 p-3 bg-green-50 border border-green-200 rounded text-sm"
+            </svg>
+            Accounts
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='import' && 'active'"
+            @click="navigate('import')"
           >
-            <p class="font-medium text-green-800">Import complete!</p>
-            <ul class="mt-1 text-green-700 space-y-0.5">
-              <li
-                x-text="'Imported: ' + (result ? result.imported : 0) + ' transactions'"
-              ></li>
-              <li
-                x-text="'Duplicates skipped: ' + (result ? result.duplicates : 0)"
-              ></li>
-              <li x-text="'Errors: ' + (result ? result.errors : 0)"></li>
-            </ul>
-          </div>
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Import CSV
+          </button>
+        </div>
 
-          <!-- Error -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Intelligence</div>
+          <button
+            class="nav-item"
+            :class="page==='recurring' && 'active'"
+            @click="navigate('recurring')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Recurring
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='forecast' && 'active'"
+            @click="navigate('forecast')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"
+              />
+            </svg>
+            Cashflow
+          </button>
+          <button
+            class="nav-item"
+            :class="page==='ai' && 'active'"
+            @click="navigate('ai')"
+          >
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Ask AI
+          </button>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="sync-btn" @click="syncAll()" :disabled="syncing">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              :class="syncing && 'spin-anim'"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <span x-text="syncing ? 'Syncing…' : 'Sync All Banks'"></span>
+          </button>
           <div
-            x-show="error"
-            class="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700"
-            x-text="error"
+            x-show="syncMsg"
+            class="text-xs text-center mt-2"
+            style="color: #7ba8ff"
+            x-text="syncMsg"
           ></div>
         </div>
-      </div>
+      </nav>
 
-      <!-- ── BUDGETS ──────────────────────────────────────────────────────── -->
-      <div
-        x-show="page==='budgets'"
-        x-data="budgetsApp()"
-        x-init="init()"
-        x-cloak
-      >
-        <div class="flex items-center justify-between mb-5">
-          <h1 class="text-2xl font-bold">Budgets</h1>
-          <div class="flex gap-2 items-center">
-            <input
-              type="month"
-              x-model="month_year"
-              @change="load()"
-              class="border rounded px-2 py-1 text-sm"
-            />
-            <button
-              @click="showForm = !showForm; editId = null; form = { category: '', month_year: null, limit_amount: '', alert_threshold: 0.8 }"
-              class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700"
+      <!-- ══════════════════════════════════════════════════════════════
+       MAIN CONTENT AREA
+  ══════════════════════════════════════════════════════════════════ -->
+      <main class="main-content">
+        <!-- ══ DASHBOARD ══════════════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='dashboard'"
+          x-data="dashboardApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Dashboard</div>
+              <div
+                class="page-subtitle"
+                x-text="'Showing data for ' + monthLabel(month_year)"
+              ></div>
+            </div>
+          </div>
+          <div class="page-body">
+            <!-- Loading -->
+            <div
+              x-show="loading"
+              class="loading-pulse"
+              style="
+                color: var(--text-muted);
+                padding: 40px 0;
+                text-align: center;
+              "
             >
-              + Add Budget
-            </button>
-          </div>
-        </div>
+              Loading your financial data…
+            </div>
 
-        <!-- Add/Edit form -->
-        <div x-show="showForm" class="card max-w-md mb-6">
-          <h2
-            class="font-semibold mb-3 text-sm"
-            x-text="editId ? 'Edit Budget' : 'New Budget Rule'"
-          ></h2>
-          <div class="space-y-3">
-            <div>
-              <label class="text-xs text-gray-500 block mb-1">Category</label>
-              <select
-                x-model="form.category"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              >
-                <option value="">Select...</option>
-                <template x-for="c in categories" :key="c">
-                  <option :value="c" x-text="c"></option>
-                </template>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs text-gray-500 block mb-1"
-                >Month (leave blank = all months)</label
-              >
-              <input
-                type="month"
-                x-model="form.month_year"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-            </div>
-            <div>
-              <label class="text-xs text-gray-500 block mb-1">Limit ($)</label>
-              <input
-                type="number"
-                x-model="form.limit_amount"
-                min="0"
-                step="10"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-            </div>
-            <div>
-              <label class="text-xs text-gray-500 block mb-1"
-                >Warning threshold (0.0–1.0)</label
-              >
-              <input
-                type="number"
-                x-model="form.alert_threshold"
-                min="0"
-                max="1"
-                step="0.05"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-            </div>
-            <div class="flex gap-2">
-              <button
-                @click="save()"
-                class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm hover:bg-blue-700"
-              >
-                Save
-              </button>
-              <button
-                @click="showForm = false"
-                class="text-gray-500 text-sm hover:text-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Status -->
-        <div class="card mb-6" x-show="status.length">
-          <h2 class="text-sm font-semibold text-gray-600 mb-4">
-            Current Month Status
-          </h2>
-          <div class="space-y-4">
-            <template x-for="b in status" :key="b.category">
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span x-text="b.category" class="font-medium"></span>
-                  <span>
-                    <span x-text="fmtAbs(b.actual_amount)"></span>
-                    <span class="text-gray-400"> / </span>
-                    <span x-text="fmtAbs(b.limit_amount)"></span>
-                    <span
-                      class="ml-2 px-1.5 py-0.5 rounded text-xs font-medium"
-                      :class="statusClass(b.status)"
-                      x-text="b.status.toUpperCase()"
-                    ></span>
-                  </span>
-                </div>
-                <div class="bg-gray-100 rounded-full h-2.5">
+            <div x-show="!loading">
+              <!-- Stat Cards -->
+              <div class="stat-grid">
+                <div class="stat-card">
+                  <div class="stat-glow green"></div>
+                  <div class="stat-label">Income This Month</div>
                   <div
-                    class="h-2.5 rounded-full transition-all"
-                    :class="barClass(b.status)"
-                    :style="`width: ${barWidth(b.pct_used)}`"
+                    class="stat-value income amount"
+                    x-text="fmtAbs(totalIncome)"
+                  ></div>
+                  <div class="stat-meta">Total received</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow red"></div>
+                  <div class="stat-label">Expenses This Month</div>
+                  <div
+                    class="stat-value expense amount"
+                    x-text="fmtAbs(totalExpenses)"
+                  ></div>
+                  <div class="stat-meta">Total spent</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow blue"></div>
+                  <div class="stat-label">Net This Month</div>
+                  <div
+                    class="stat-value amount"
+                    :class="netThisMonth >= 0 ? 'net-pos' : 'net-neg'"
+                    x-text="fmt(netThisMonth)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    :class="netThisMonth >= 0 ? 'amount-income' : 'amount-expense'"
+                    x-text="netThisMonth >= 0 ? '▲ Saving' : '▼ Over-spending'"
                   ></div>
                 </div>
               </div>
-            </template>
-          </div>
-        </div>
 
-        <!-- Rules table -->
-        <div class="card" x-show="rules.length">
-          <h2 class="text-sm font-semibold text-gray-600 mb-3">
-            All Budget Rules
-          </h2>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Month</th>
-                  <th>Limit</th>
-                  <th>Warn At</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="r in rules" :key="r.id">
-                  <tr>
-                    <td x-text="r.category"></td>
-                    <td
-                      x-text="r.month_year || 'All months'"
-                      class="text-gray-500 text-sm"
-                    ></td>
-                    <td x-text="fmtAbs(r.limit_amount)"></td>
-                    <td
-                      x-text="(r.alert_threshold * 100).toFixed(0) + '%'"
-                    ></td>
-                    <td class="flex gap-2">
-                      <button
-                        @click="startEdit(r)"
-                        class="text-xs text-blue-600 hover:text-blue-800"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        @click="remove(r.id)"
-                        class="text-xs text-red-500 hover:text-red-700"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div
-          x-show="!rules.length && !showForm"
-          class="text-gray-400 text-sm mt-4"
-        >
-          No budget rules yet. Click "+ Add Budget" to get started.
-        </div>
-      </div>
-
-      <!-- ── NET WORTH ────────────────────────────────────────────────────── -->
-      <div
-        x-show="page==='networth'"
-        x-data="netWorthApp()"
-        x-init="init()"
-        x-cloak
-      >
-        <div class="flex items-center justify-between mb-5">
-          <h1 class="text-2xl font-bold">Net Worth</h1>
-          <div class="flex gap-2">
-            <button
-              @click="showAcctForm = !showAcctForm"
-              class="bg-gray-100 text-gray-700 px-3 py-1.5 rounded text-sm hover:bg-gray-200"
-            >
-              + Account
-            </button>
-            <button
-              @click="showSnapForm = !showSnapForm"
-              class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700"
-            >
-              + Balance
-            </button>
-          </div>
-        </div>
-
-        <div x-show="loading" class="text-gray-400 text-sm">Loading...</div>
-
-        <div x-show="!loading">
-          <!-- Total -->
-          <div class="card mb-6 text-center" x-show="latest">
-            <div class="text-xs text-gray-500 mb-1">Total Net Worth</div>
-            <div
-              class="text-4xl font-bold text-blue-700"
-              x-text="fmt(latest ? latest.total_net_worth : 0)"
-            ></div>
-          </div>
-
-          <!-- Add account form -->
-          <div x-show="showAcctForm" class="card max-w-md mb-4">
-            <h2 class="text-sm font-semibold mb-3">Add Account</h2>
-            <div class="space-y-2">
-              <input
-                type="text"
-                x-model="acctForm.name"
-                placeholder="Account name"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-              <select
-                x-model="acctForm.type"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              >
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
-                <option value="credit">Credit Card</option>
-                <option value="investment">Investment</option>
-              </select>
-              <input
-                type="text"
-                x-model="acctForm.institution"
-                placeholder="Institution (optional)"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-              <div class="flex gap-2 mt-1">
-                <button
-                  @click="addAccount()"
-                  class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm"
-                >
-                  Save
-                </button>
-                <button
-                  @click="showAcctForm = false"
-                  class="text-gray-500 text-sm"
-                >
-                  Cancel
-                </button>
+              <!-- Charts row -->
+              <div class="grid-2" style="margin-bottom: 24px">
+                <div class="card card-pad">
+                  <div class="card-header">
+                    <div class="card-title">Spending by Category</div>
+                    <span class="text-xs text-muted">This month</span>
+                  </div>
+                  <div class="chart-wrap" style="height: 220px">
+                    <canvas id="catPieChart"></canvas>
+                  </div>
+                </div>
+                <div class="card card-pad">
+                  <div class="card-header">
+                    <div class="card-title">Income vs Expenses</div>
+                    <span class="text-xs text-muted">Last 3 months</span>
+                  </div>
+                  <div class="chart-wrap" style="height: 220px">
+                    <canvas id="incomeBarChart"></canvas>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Add snapshot form -->
-          <div x-show="showSnapForm" class="card max-w-md mb-4">
-            <h2 class="text-sm font-semibold mb-3">Record Balance</h2>
-            <div class="space-y-2">
-              <select
-                x-model="snapForm.account_id"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              >
-                <option value="">Select account...</option>
-                <template x-for="a in accounts" :key="a.id">
-                  <option :value="a.id" x-text="a.name"></option>
-                </template>
-              </select>
-              <input
-                type="number"
-                x-model="snapForm.balance"
-                placeholder="Balance ($)"
-                step="0.01"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-              <input
-                type="date"
-                x-model="snapForm.snapshot_date"
-                class="border rounded px-2 py-1.5 text-sm w-full"
-              />
-              <div class="flex gap-2 mt-1">
-                <button
-                  @click="addSnapshot()"
-                  class="bg-blue-600 text-white px-4 py-1.5 rounded text-sm"
-                >
-                  Save
-                </button>
-                <button
-                  @click="showSnapForm = false"
-                  class="text-gray-500 text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Chart -->
-          <div class="card mb-6" x-show="history.length">
-            <h2 class="text-sm font-semibold text-gray-600 mb-3">
-              Net Worth Over Time
-            </h2>
-            <canvas id="netWorthChart" height="150"></canvas>
-          </div>
-
-          <!-- Account balances -->
-          <div class="card" x-show="latest && latest.accounts.length">
-            <h2 class="text-sm font-semibold text-gray-600 mb-3">
-              Account Balances
-            </h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <th>Type</th>
-                    <th>Institution</th>
-                    <th class="text-right">Balance</th>
-                    <th>As of</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template
-                    x-for="a in (latest ? latest.accounts : [])"
-                    :key="a.account_id"
-                  >
-                    <tr>
-                      <td x-text="a.account_name" class="font-medium"></td>
-                      <td
-                        x-text="a.type"
-                        class="capitalize text-gray-500 text-sm"
-                      ></td>
-                      <td
-                        x-text="a.institution || '—'"
-                        class="text-gray-500 text-sm"
-                      ></td>
-                      <td
-                        class="text-right font-mono text-sm"
-                        :class="(a.balance || 0) >= 0 ? 'amount-income' : 'amount-expense'"
-                        x-text="a.balance !== null ? fmt(a.balance) : '—'"
-                      ></td>
-                      <td
-                        x-text="a.as_of || '—'"
-                        class="text-gray-400 text-sm"
-                      ></td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div
-            x-show="!latest || !latest.accounts.length"
-            class="text-gray-400 text-sm mt-4"
-          >
-            No accounts yet. Click "+ Account" to add one.
-          </div>
-        </div>
-      </div>
-
-      <!-- ── AI QUERY ────────────────────────────────────────────────────── -->
-      <div x-show="page==='ai'" x-data="aiApp()" x-cloak>
-        <h1 class="text-2xl font-bold mb-5">Ask AI</h1>
-
-        <!-- Input -->
-        <div class="card mb-6">
-          <div class="flex gap-2">
-            <input
-              type="text"
-              x-model="question"
-              @keyup.enter="ask()"
-              placeholder="e.g. How much did I spend on food last month?"
-              class="border rounded px-3 py-2 text-sm flex-1"
-            />
-            <button
-              @click="ask()"
-              :disabled="loading"
-              class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              <span x-show="!loading">Ask</span>
-              <span x-show="loading">Thinking...</span>
-            </button>
-          </div>
-
-          <!-- Suggestions -->
-          <div class="mt-3 flex flex-wrap gap-2">
-            <template x-for="s in suggestions" :key="s">
-              <button
-                @click="useSuggestion(s)"
-                class="text-xs px-2 py-1 bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-700 rounded border"
-                x-text="s"
-              ></button>
-            </template>
-          </div>
-        </div>
-
-        <!-- Latest result -->
-        <div x-show="result" class="card mb-6">
-          <div class="flex items-start justify-between gap-2 mb-2">
-            <p class="text-gray-800" x-text="result ? result.answer : ''"></p>
-            <span
-              class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500 whitespace-nowrap"
-              x-text="result ? result.source : ''"
-            ></span>
-          </div>
-          <!-- Data table if present -->
-          <div
-            x-show="result && result.data && result.data.rows && result.data.rows.length"
-            class="mt-3"
-          >
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
+              <!-- Budget Status & Top Merchants row -->
+              <div class="grid-2">
+                <!-- Budget alerts -->
+                <div class="card card-pad" x-show="budgetStatus.length">
+                  <div class="card-header">
+                    <div class="card-title">Budget Alerts</div>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 14px">
                     <template
-                      x-if="result && result.data && result.data.rows && result.data.rows[0]"
+                      x-for="b in budgetStatus.slice(0,6)"
+                      :key="b.category"
                     >
-                      <template
-                        x-for="key in Object.keys(result.data.rows[0])"
-                        :key="key"
-                      >
-                        <th x-text="key"></th>
-                      </template>
+                      <div>
+                        <div class="flex-between" style="margin-bottom: 4px">
+                          <span
+                            style="font-size: 13px; font-weight: 500"
+                            x-text="b.category"
+                          ></span>
+                          <div class="flex items-center gap-2">
+                            <span
+                              class="amount text-sm"
+                              x-text="fmtAbs(b.actual_amount) + ' / ' + fmtAbs(b.limit_amount)"
+                            ></span>
+                            <span
+                              :class="badgeClass(b.status)"
+                              x-text="b.status.toUpperCase()"
+                            ></span>
+                          </div>
+                        </div>
+                        <div class="budget-bar-track">
+                          <div
+                            class="budget-bar-fill"
+                            :class="barClass(b.status)"
+                            :style="'width:' + barWidth(b.pct_used)"
+                          ></div>
+                        </div>
+                      </div>
                     </template>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template
-                    x-for="(row, i) in (result && result.data ? result.data.rows : [])"
-                    :key="i"
+                  </div>
+                </div>
+                <div class="card card-pad" x-show="!budgetStatus.length">
+                  <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <div class="empty-state-title">No budgets set</div>
+                    <div class="empty-state-body">
+                      Go to <strong>Budgets</strong> to set spending limits
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Top Merchants -->
+                <div
+                  class="card"
+                  x-show="insights && insights.top_merchants.length"
+                >
+                  <div class="card-pad" style="padding-bottom: 0">
+                    <div class="card-header" style="margin-bottom: 0">
+                      <div class="card-title">Top Merchants</div>
+                      <span class="text-xs text-muted">This month</span>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Merchant</th>
+                          <th>Category</th>
+                          <th style="text-align: right">Total</th>
+                          <th style="text-align: right">Txns</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template
+                          x-for="m in (insights ? insights.top_merchants : [])"
+                          :key="m.merchant"
+                        >
+                          <tr>
+                            <td
+                              style="font-weight: 500"
+                              x-text="m.merchant || '—'"
+                            ></td>
+                            <td>
+                              <span class="cat-pill" x-text="m.category"></span>
+                            </td>
+                            <td
+                              class="mono-cell amount-expense"
+                              style="text-align: right"
+                              x-text="fmtAbs(m.total)"
+                            ></td>
+                            <td
+                              class="text-muted text-sm"
+                              style="text-align: right"
+                              x-text="m.count"
+                            ></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- /!loading -->
+          </div>
+          <!-- /page-body -->
+        </div>
+        <!-- /dashboard -->
+
+        <!-- ══ TRANSACTIONS ═══════════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='transactions'"
+          x-data="transactionsApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Transactions</div>
+            </div>
+            <!-- Month nav -->
+            <div class="flex items-center gap-3">
+              <div class="month-nav">
+                <button class="month-nav-btn" @click="navMonth(-1)">‹</button>
+                <span class="month-nav-label" x-text="monthLabel"></span>
+                <button class="month-nav-btn" @click="navMonth(1)">›</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <!-- Summary row -->
+            <div class="flex items-center gap-4" style="margin-bottom: 16px">
+              <div style="font-size: 13px; color: var(--text-muted)">
+                <span x-text="transactions.length"></span> transactions
+              </div>
+              <div
+                style="
+                  margin-left: auto;
+                  display: flex;
+                  gap: 16px;
+                  align-items: center;
+                "
+              >
+                <div style="font-size: 13px">
+                  <span class="text-muted">Income </span>
+                  <span
+                    class="amount amount-income font-semibold"
+                    x-text="fmtAbs(totalIncome)"
+                  ></span>
+                </div>
+                <div style="font-size: 13px">
+                  <span class="text-muted">Spent </span>
+                  <span
+                    class="amount amount-expense font-semibold"
+                    x-text="fmtAbs(totalExpenses)"
+                  ></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card card-pad" style="margin-bottom: 16px">
+              <div class="flex items-center gap-3 flex-wrap">
+                <div class="form-group" style="flex: 0 0 auto">
+                  <label class="form-label">Category</label>
+                  <select
+                    x-model="filters.category"
+                    @change="load()"
+                    class="form-select"
+                    style="width: 180px"
                   >
+                    <option value="">All categories</option>
+                    <template x-for="c in categories" :key="c.name">
+                      <option :value="c.name" x-text="c.name"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px">
+                  <label class="form-label">Search</label>
+                  <input
+                    type="text"
+                    x-model="filters.search"
+                    @keyup.enter="load()"
+                    placeholder="Search merchants or descriptions…"
+                    class="form-input"
+                  />
+                </div>
+                <div style="margin-top: 18px">
+                  <button @click="load()" class="btn btn-primary btn-sm">
+                    Search
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="card">
+              <div
+                x-show="loading"
+                class="loading-pulse"
+                style="
+                  padding: 32px;
+                  text-align: center;
+                  color: var(--text-muted);
+                "
+              >
+                Loading transactions…
+              </div>
+              <div class="table-wrap" x-show="!loading">
+                <table class="data-table">
+                  <thead>
                     <tr>
-                      <template x-for="key in Object.keys(row)" :key="key">
-                        <td
-                          x-text="typeof row[key] === 'number' ? (key.includes('total') || key.includes('income') || key.includes('expense') ? '$' + row[key].toFixed(2) : row[key]) : row[key]"
-                        ></td>
-                      </template>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Merchant</th>
+                      <th>Category</th>
+                      <th style="text-align: right">Amount</th>
                     </tr>
-                  </template>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <template x-for="txn in transactions" :key="txn.id">
+                      <tr>
+                        <td
+                          class="text-muted text-sm"
+                          style="white-space: nowrap"
+                          x-text="txn.date"
+                        ></td>
+                        <td
+                          class="truncate"
+                          style="max-width: 260px; font-size: 13px"
+                          x-text="txn.description"
+                          :title="txn.description"
+                        ></td>
+                        <td
+                          style="font-size: 13px; color: var(--text-secondary)"
+                          x-text="txn.merchant_clean || '—'"
+                        ></td>
+                        <td>
+                          <!-- View mode -->
+                          <template x-if="editingId !== txn.id">
+                            <span
+                              class="cat-pill"
+                              @click="startEdit(txn)"
+                              x-text="txn.category"
+                              title="Click to edit category"
+                            ></span>
+                          </template>
+                          <!-- Edit mode -->
+                          <template x-if="editingId === txn.id">
+                            <div class="flex items-center gap-2">
+                              <select
+                                x-model="editCategory"
+                                class="inline-select"
+                              >
+                                <template x-for="c in categories" :key="c.name">
+                                  <option
+                                    :value="c.name"
+                                    x-text="c.name"
+                                  ></option>
+                                </template>
+                              </select>
+                              <button
+                                @click="saveEdit(txn)"
+                                class="btn btn-primary btn-xs"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                @click="cancelEdit()"
+                                class="btn btn-ghost btn-xs"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </template>
+                        </td>
+                        <td
+                          class="mono-cell"
+                          style="text-align: right"
+                          :class="txn.amount < 0 ? 'amount-expense' : 'amount-income'"
+                          x-text="fmt(txn.amount)"
+                        ></td>
+                      </tr>
+                    </template>
+                    <tr x-show="!loading && !transactions.length">
+                      <td colspan="5">
+                        <div class="empty-state">
+                          <div class="empty-state-icon">🔍</div>
+                          <div class="empty-state-title">
+                            No transactions found
+                          </div>
+                          <div class="empty-state-body">
+                            Try a different month or adjust your filters
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
+        <!-- /transactions -->
 
-        <!-- History -->
-        <div x-show="history.length">
-          <h2 class="text-sm font-semibold text-gray-500 mb-3">
-            Previous Questions
-          </h2>
-          <div class="space-y-2">
-            <template x-for="(item, i) in history.slice(1)" :key="i">
-              <div class="card">
-                <p class="text-xs text-gray-500 mb-1" x-text="item.q"></p>
-                <p class="text-sm text-gray-700" x-text="item.a"></p>
+        <!-- ══ ACCOUNTS / PLAID ═══════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='accounts'"
+          x-data="accountsApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Connected Accounts</div>
+              <div class="page-subtitle">
+                Manage your bank connections via Plaid
               </div>
-            </template>
+            </div>
+            <div class="flex gap-2">
+              <button
+                x-show="items.length > 0"
+                @click="syncAll()"
+                :disabled="syncing"
+                class="btn btn-secondary"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+                <span x-text="syncing ? 'Syncing…' : 'Sync All'"></span>
+              </button>
+              <button
+                @click="connectBank()"
+                :disabled="syncing"
+                class="btn btn-primary"
+              >
+                + Connect Bank
+              </button>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <!-- Alerts -->
+            <div
+              x-show="error"
+              class="alert alert-error"
+              style="margin-bottom: 16px"
+              x-text="error"
+            ></div>
+            <div
+              x-show="syncResults && syncResults.length"
+              class="alert alert-success"
+              style="margin-bottom: 16px"
+            >
+              <strong>Sync complete!</strong>
+              <template
+                x-for="r in (syncResults || [])"
+                :key="r.institution_name"
+              >
+                <div
+                  x-text="r.institution_name + ': ' + r.imported + ' new transactions, ' + r.accounts_synced + ' accounts'"
+                ></div>
+              </template>
+            </div>
+
+            <!-- Plaid not configured -->
+            <div
+              x-show="status && !status.configured"
+              class="card card-pad alert-warning"
+              style="
+                margin-bottom: 20px;
+                border: 1.5px solid rgba(217, 119, 6, 0.25);
+              "
+            >
+              <div
+                style="font-weight: 600; font-size: 14px; margin-bottom: 8px"
+              >
+                ⚠️ Plaid not configured
+              </div>
+              <p style="font-size: 13px; margin-bottom: 10px">
+                Add your free Plaid API keys to
+                <code
+                  style="
+                    background: rgba(0, 0, 0, 0.06);
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                  "
+                  >.env</code
+                >
+                to connect real banks:
+              </p>
+              <div class="code-block">
+                PLAID_CLIENT_ID=your_client_id<br />PLAID_SECRET=your_secret<br />PLAID_ENV=sandbox
+              </div>
+              <p style="font-size: 12px; margin-top: 8px; color: var(--amber)">
+                Get free keys at <strong>dashboard.plaid.com</strong> → Team
+                Settings → Keys
+              </p>
+            </div>
+
+            <!-- Connected institutions -->
+            <div
+              x-show="items.length"
+              class="card card-pad"
+              style="margin-bottom: 20px"
+            >
+              <div class="card-header">
+                <div class="card-title">Connected Institutions</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <template x-for="item in items" :key="item.id">
+                  <div class="bank-card">
+                    <div class="flex items-center gap-12px" style="gap: 12px">
+                      <div class="bank-logo">🏦</div>
+                      <div>
+                        <div
+                          style="font-weight: 600; font-size: 14px"
+                          x-text="item.institution_name"
+                        ></div>
+                        <div
+                          class="text-muted text-xs"
+                          x-text="item.last_synced ? 'Last synced ' + item.last_synced.slice(0,16).replace('T',' ') : 'Never synced'"
+                        ></div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        @click="syncOne(item.id)"
+                        :disabled="syncing"
+                        class="btn btn-secondary btn-sm"
+                      >
+                        Sync
+                      </button>
+                      <button
+                        @click="disconnect(item.id, item.institution_name)"
+                        class="btn btn-danger btn-sm"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Account balances from net worth -->
+            <div x-show="accounts.length" class="card">
+              <div class="card-pad" style="padding-bottom: 0">
+                <div class="card-title" style="margin-bottom: 0">
+                  Account Balances
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Type</th>
+                      <th>Institution</th>
+                      <th style="text-align: right">Balance</th>
+                      <th>As Of</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="a in accounts" :key="a.account_id">
+                      <tr>
+                        <td
+                          style="font-weight: 500"
+                          x-text="a.account_name"
+                        ></td>
+                        <td
+                          class="text-muted text-sm"
+                          style="text-transform: capitalize"
+                          x-text="a.type"
+                        ></td>
+                        <td
+                          class="text-muted text-sm"
+                          x-text="a.institution || '—'"
+                        ></td>
+                        <td
+                          class="mono-cell"
+                          style="text-align: right"
+                          :class="(a.balance||0) >= 0 ? 'amount-income' : 'amount-expense'"
+                          x-text="a.balance !== null ? fmt(a.balance) : '—'"
+                        ></td>
+                        <td
+                          class="text-muted text-sm"
+                          x-text="a.as_of || '—'"
+                        ></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div x-show="items.length === 0 && status && status.configured">
+              <div class="empty-state" style="padding: 80px 0">
+                <div class="empty-state-icon">🏦</div>
+                <div class="empty-state-title">No accounts connected</div>
+                <div class="empty-state-body">
+                  Click <strong>+ Connect Bank</strong> to link your first
+                  institution via Plaid
+                </div>
+                <div class="text-xs text-muted" style="margin-top: 8px">
+                  Supports SoFi, Chase, Schwab, Fidelity, Amex, Discover, and
+                  thousands more
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+        <!-- /accounts -->
 
+        <!-- ══ IMPORT CSV ══════════════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='import'"
+          x-data="importApp()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Import CSV</div>
+              <div class="page-subtitle">
+                Upload a bank statement to import transactions
+              </div>
+            </div>
+          </div>
+          <div class="page-body">
+            <div style="max-width: 520px">
+              <div class="card card-pad">
+                <div style="display: flex; flex-direction: column; gap: 16px">
+                  <div class="form-group">
+                    <label class="form-label">Bank Profile</label>
+                    <select x-model="form.bank_profile" class="form-select">
+                      <option value="sofi">SoFi</option>
+                      <option value="generic">
+                        Generic (Date, Description, Amount)
+                      </option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label"
+                      >Account Name
+                      <span style="color: var(--red)">*</span></label
+                    >
+                    <input
+                      type="text"
+                      x-model="form.account_name"
+                      placeholder="e.g. SoFi Checking"
+                      class="form-input"
+                    />
+                  </div>
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label">Account Type</label>
+                      <select x-model="form.account_type" class="form-select">
+                        <option value="checking">Checking</option>
+                        <option value="savings">Savings</option>
+                        <option value="credit">Credit Card</option>
+                        <option value="investment">Investment</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Institution</label>
+                      <input
+                        type="text"
+                        x-model="form.institution"
+                        placeholder="e.g. SoFi"
+                        class="form-input"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label"
+                      >CSV File <span style="color: var(--red)">*</span></label
+                    >
+                    <input
+                      type="file"
+                      accept=".csv"
+                      @change="handleFile($event)"
+                      class="form-input"
+                      style="padding: 7px 12px; cursor: pointer"
+                    />
+                  </div>
+                  <label
+                    class="flex items-center gap-2"
+                    style="
+                      cursor: pointer;
+                      font-size: 13px;
+                      color: var(--text-secondary);
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      x-model="form.run_ai"
+                      style="
+                        width: 15px;
+                        height: 15px;
+                        accent-color: var(--blue);
+                      "
+                    />
+                    Auto-categorize with AI after import
+                  </label>
+                  <button
+                    @click="submit()"
+                    :disabled="loading"
+                    class="btn btn-primary"
+                    style="width: 100%"
+                  >
+                    <span x-show="!loading">Import Transactions</span>
+                    <span x-show="loading" class="flex items-center gap-2"
+                      ><span class="spinner"></span> Importing &amp;
+                      categorizing…</span
+                    >
+                  </button>
+                </div>
+
+                <!-- Result -->
+                <div
+                  x-show="result"
+                  class="alert alert-success"
+                  style="margin-top: 16px"
+                >
+                  <div style="font-weight: 600; margin-bottom: 6px">
+                    Import complete!
+                  </div>
+                  <div
+                    x-text="'✓ ' + (result?.imported ?? 0) + ' transactions imported'"
+                  ></div>
+                  <div
+                    class="text-sm"
+                    style="opacity: 0.8"
+                    x-text="'⊘ ' + (result?.duplicates ?? 0) + ' duplicates skipped · ' + (result?.errors ?? 0) + ' errors'"
+                  ></div>
+                </div>
+
+                <!-- Error -->
+                <div
+                  x-show="error"
+                  class="alert alert-error"
+                  style="margin-top: 16px"
+                  x-text="error"
+                ></div>
+              </div>
+
+              <!-- Tips -->
+              <div
+                class="card card-pad"
+                style="
+                  margin-top: 16px;
+                  background: var(--surface-2);
+                  border-color: var(--border-soft);
+                "
+              >
+                <div class="card-title" style="margin-bottom: 10px">
+                  Import Tips
+                </div>
+                <ul
+                  style="
+                    list-style: none;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    font-size: 13px;
+                    color: var(--text-secondary);
+                  "
+                >
+                  <li>📥 Download your CSV from your bank's website or app</li>
+                  <li>
+                    🔁 Duplicate transactions are automatically detected and
+                    skipped
+                  </li>
+                  <li>🤖 AI will auto-categorize transactions if enabled</li>
+                  <li>
+                    ✏️ You can always manually edit categories in the
+                    Transactions view
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /import -->
+
+        <!-- ══ BUDGETS ═════════════════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='budgets'"
+          x-data="budgetsApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Budgets</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="month-nav">
+                <button class="month-nav-btn" @click="navMonth(-1)">‹</button>
+                <span class="month-nav-label" x-text="monthLabel"></span>
+                <button class="month-nav-btn" @click="navMonth(1)">›</button>
+              </div>
+              <button
+                @click="showForm = !showForm; editId = null; form = { category:'', month_year:'', limit_amount:'', alert_threshold:0.8 }"
+                class="btn btn-primary"
+              >
+                + Add Budget
+              </button>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <!-- Add / Edit form -->
+            <div
+              x-show="showForm"
+              class="card card-pad"
+              style="max-width: 480px; margin-bottom: 20px"
+            >
+              <div
+                style="font-weight: 600; font-size: 15px; margin-bottom: 16px"
+                x-text="editId ? 'Edit Budget Rule' : 'New Budget Rule'"
+              ></div>
+              <div style="display: flex; flex-direction: column; gap: 14px">
+                <div class="form-group">
+                  <label class="form-label">Category</label>
+                  <select x-model="form.category" class="form-select">
+                    <option value="">Select a category…</option>
+                    <template x-for="c in categories" :key="c">
+                      <option :value="c" x-text="c"></option>
+                    </template>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label"
+                    >Month (leave blank for all months)</label
+                  >
+                  <input
+                    type="month"
+                    x-model="form.month_year"
+                    class="form-input"
+                  />
+                </div>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label">Monthly Limit ($)</label>
+                    <input
+                      type="number"
+                      x-model="form.limit_amount"
+                      min="0"
+                      step="10"
+                      placeholder="500"
+                      class="form-input"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Warn at (%)</label>
+                    <input
+                      type="number"
+                      x-model="form.alert_threshold"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      placeholder="0.8"
+                      class="form-input"
+                    />
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button @click="save()" class="btn btn-primary">
+                    Save Rule
+                  </button>
+                  <button @click="showForm = false" class="btn btn-ghost">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chart -->
+            <div
+              class="card card-pad"
+              x-show="status.length"
+              style="margin-bottom: 20px"
+            >
+              <div class="card-header">
+                <div class="card-title">Spending vs Budget</div>
+              </div>
+              <div style="height: 260px; position: relative">
+                <canvas id="budgetRadarChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Status list -->
+            <div
+              class="card card-pad"
+              x-show="status.length"
+              style="margin-bottom: 20px"
+            >
+              <div class="card-header">
+                <div class="card-title">Current Month Status</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 16px">
+                <template x-for="b in status" :key="b.category">
+                  <div>
+                    <div class="flex-between" style="margin-bottom: 5px">
+                      <span
+                        style="font-size: 13.5px; font-weight: 500"
+                        x-text="b.category"
+                      ></span>
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="amount text-sm"
+                          style="color: var(--text-secondary)"
+                          x-text="fmtAbs(b.actual_amount) + ' / ' + fmtAbs(b.limit_amount)"
+                        ></span>
+                        <span
+                          :class="badgeClass(b.status)"
+                          x-text="b.status.toUpperCase()"
+                        ></span>
+                      </div>
+                    </div>
+                    <div class="budget-bar-track">
+                      <div
+                        class="budget-bar-fill"
+                        :class="barClass(b.status)"
+                        :style="'width:' + barWidth(b.pct_used)"
+                      ></div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Rules table -->
+            <div class="card" x-show="rules.length">
+              <div class="card-pad" style="padding-bottom: 0">
+                <div class="card-title">All Budget Rules</div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Applies To</th>
+                      <th style="text-align: right">Limit</th>
+                      <th style="text-align: right">Warn At</th>
+                      <th style="text-align: right"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="r in rules" :key="r.id">
+                      <tr>
+                        <td style="font-weight: 500" x-text="r.category"></td>
+                        <td
+                          class="text-muted text-sm"
+                          x-text="r.month_year || 'All months'"
+                        ></td>
+                        <td
+                          class="mono-cell"
+                          style="text-align: right"
+                          x-text="fmtAbs(r.limit_amount)"
+                        ></td>
+                        <td
+                          class="text-muted"
+                          style="text-align: right"
+                          x-text="(r.alert_threshold * 100).toFixed(0) + '%'"
+                        ></td>
+                        <td style="text-align: right">
+                          <div
+                            class="flex gap-2"
+                            style="justify-content: flex-end"
+                          >
+                            <button
+                              @click="startEdit(r)"
+                              class="btn btn-ghost btn-xs"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              @click="remove(r.id)"
+                              class="btn btn-danger btn-xs"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Empty state -->
+            <div x-show="!rules.length && !showForm" class="empty-state">
+              <div class="empty-state-icon">📊</div>
+              <div class="empty-state-title">No budget rules yet</div>
+              <div class="empty-state-body">
+                Click <strong>+ Add Budget</strong> to start tracking your
+                spending limits
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /budgets -->
+
+        <!-- ══ NET WORTH ═══════════════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='networth'"
+          x-data="netWorthApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Net Worth</div>
+              <div class="page-subtitle">
+                Track your assets and liabilities over time
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="showAcctForm = !showAcctForm"
+                class="btn btn-secondary"
+              >
+                + Account
+              </button>
+              <button
+                @click="showSnapForm = !showSnapForm"
+                class="btn btn-primary"
+              >
+                + Record Balance
+              </button>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <div
+              x-show="loading"
+              class="loading-pulse"
+              style="
+                text-align: center;
+                color: var(--text-muted);
+                padding: 40px;
+              "
+            >
+              Loading…
+            </div>
+
+            <div x-show="!loading">
+              <!-- Hero total -->
+              <div class="nw-hero" style="margin-bottom: 20px" x-show="latest">
+                <div class="nw-label">Total Net Worth</div>
+                <div
+                  class="nw-total amount"
+                  x-text="fmt(latest?.total_net_worth ?? 0)"
+                ></div>
+                <div
+                  style="
+                    margin-top: 12px;
+                    display: flex;
+                    gap: 32px;
+                    justify-content: center;
+                    position: relative;
+                  "
+                >
+                  <div>
+                    <div class="nw-label">Assets</div>
+                    <div
+                      style="
+                        font-family: var(--mono);
+                        font-size: 18px;
+                        color: rgba(255, 255, 255, 0.85);
+                      "
+                      x-text="fmtAbs(totalAssets)"
+                    ></div>
+                  </div>
+                  <div>
+                    <div class="nw-label">Liabilities</div>
+                    <div
+                      style="
+                        font-family: var(--mono);
+                        font-size: 18px;
+                        color: rgba(220, 38, 38, 0.85);
+                      "
+                      x-text="fmtAbs(totalLiabilities)"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add forms row -->
+              <div
+                class="grid-2"
+                style="margin-bottom: 20px"
+                x-show="showAcctForm || showSnapForm"
+              >
+                <div class="card card-pad" x-show="showAcctForm">
+                  <div
+                    style="
+                      font-weight: 600;
+                      font-size: 14px;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    Add Account
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 10px">
+                    <input
+                      type="text"
+                      x-model="acctForm.name"
+                      placeholder="Account name"
+                      class="form-input"
+                    />
+                    <select x-model="acctForm.type" class="form-select">
+                      <option value="checking">Checking</option>
+                      <option value="savings">Savings</option>
+                      <option value="credit">Credit Card</option>
+                      <option value="investment">Investment</option>
+                    </select>
+                    <input
+                      type="text"
+                      x-model="acctForm.institution"
+                      placeholder="Institution (optional)"
+                      class="form-input"
+                    />
+                    <div class="flex gap-2">
+                      <button
+                        @click="addAccount()"
+                        class="btn btn-primary btn-sm"
+                      >
+                        Save
+                      </button>
+                      <button
+                        @click="showAcctForm = false"
+                        class="btn btn-ghost btn-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="card card-pad" x-show="showSnapForm">
+                  <div
+                    style="
+                      font-weight: 600;
+                      font-size: 14px;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    Record Balance
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 10px">
+                    <select x-model="snapForm.account_id" class="form-select">
+                      <option value="">Select account…</option>
+                      <template x-for="a in accounts" :key="a.id">
+                        <option :value="a.id" x-text="a.name"></option>
+                      </template>
+                    </select>
+                    <input
+                      type="number"
+                      x-model="snapForm.balance"
+                      placeholder="Balance ($)"
+                      step="0.01"
+                      class="form-input"
+                    />
+                    <input
+                      type="date"
+                      x-model="snapForm.snapshot_date"
+                      class="form-input"
+                    />
+                    <div class="flex gap-2">
+                      <button
+                        @click="addSnapshot()"
+                        class="btn btn-primary btn-sm"
+                      >
+                        Save
+                      </button>
+                      <button
+                        @click="showSnapForm = false"
+                        class="btn btn-ghost btn-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart -->
+              <div
+                class="card card-pad"
+                style="margin-bottom: 20px"
+                x-show="history.length"
+              >
+                <div class="card-header">
+                  <div class="card-title">Net Worth Over Time</div>
+                </div>
+                <div style="height: 200px">
+                  <canvas id="netWorthChart"></canvas>
+                </div>
+              </div>
+
+              <!-- Account breakdown -->
+              <div class="grid-2" x-show="(latest?.accounts ?? []).length">
+                <div class="card">
+                  <div class="card-pad" style="padding-bottom: 8px">
+                    <div class="card-title" style="color: var(--green)">
+                      Assets
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Account</th>
+                          <th>Institution</th>
+                          <th style="text-align: right">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="a in assets" :key="a.account_id">
+                          <tr>
+                            <td
+                              style="font-weight: 500; font-size: 13px"
+                              x-text="a.account_name"
+                            ></td>
+                            <td
+                              class="text-muted text-sm"
+                              x-text="a.institution || '—'"
+                            ></td>
+                            <td
+                              class="mono-cell amount-income"
+                              style="text-align: right"
+                              x-text="fmtAbs(a.balance)"
+                            ></td>
+                          </tr>
+                        </template>
+                        <tr x-show="!assets.length">
+                          <td
+                            colspan="3"
+                            class="text-muted"
+                            style="text-align: center; padding: 20px"
+                          >
+                            No assets recorded
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-pad" style="padding-bottom: 8px">
+                    <div class="card-title" style="color: var(--red)">
+                      Liabilities
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Account</th>
+                          <th>Institution</th>
+                          <th style="text-align: right">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="a in liabilities" :key="a.account_id">
+                          <tr>
+                            <td
+                              style="font-weight: 500; font-size: 13px"
+                              x-text="a.account_name"
+                            ></td>
+                            <td
+                              class="text-muted text-sm"
+                              x-text="a.institution || '—'"
+                            ></td>
+                            <td
+                              class="mono-cell amount-expense"
+                              style="text-align: right"
+                              x-text="fmt(a.balance)"
+                            ></td>
+                          </tr>
+                        </template>
+                        <tr x-show="!liabilities.length">
+                          <td
+                            colspan="3"
+                            class="text-muted"
+                            style="text-align: center; padding: 20px"
+                          >
+                            No liabilities recorded
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty -->
+              <div
+                x-show="!latest || !(latest.accounts ?? []).length"
+                class="empty-state"
+              >
+                <div class="empty-state-icon">📈</div>
+                <div class="empty-state-title">No accounts yet</div>
+                <div class="empty-state-body">
+                  Click <strong>+ Account</strong> to create your first account,
+                  then <strong>+ Record Balance</strong> to log a balance
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /net worth -->
+
+        <!-- ══ ASK AI ══════════════════════════════════════════════════════════════ -->
+        <div x-show="page==='ai'" x-data="aiApp()" x-cloak class="page-enter">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Ask AI</div>
+              <div class="page-subtitle">
+                Ask questions about your spending in plain English
+              </div>
+            </div>
+          </div>
+
+          <div class="page-body" style="max-width: 760px">
+            <!-- Input -->
+            <div class="card card-pad" style="margin-bottom: 20px">
+              <div class="flex gap-2" style="margin-bottom: 12px">
+                <input
+                  type="text"
+                  x-model="question"
+                  @keyup.enter="ask()"
+                  placeholder="e.g. How much did I spend on restaurants last month?"
+                  class="form-input"
+                  style="flex: 1"
+                />
+                <button
+                  @click="ask()"
+                  :disabled="loading"
+                  class="btn btn-primary"
+                  style="min-width: 90px"
+                >
+                  <span x-show="!loading">Ask →</span>
+                  <span x-show="loading" class="flex items-center gap-2"
+                    ><span class="spinner"></span
+                  ></span>
+                </button>
+              </div>
+              <!-- Suggestions -->
+              <div class="flex flex-wrap gap-2">
+                <template x-for="s in suggestions" :key="s">
+                  <button
+                    @click="useSuggestion(s)"
+                    class="suggestion-chip"
+                    x-text="s"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Latest result -->
+            <div x-show="result" class="ai-bubble" style="margin-bottom: 16px">
+              <div class="flex-between" style="margin-bottom: 10px">
+                <div
+                  style="
+                    font-size: 11px;
+                    font-weight: 600;
+                    letter-spacing: 0.06em;
+                    text-transform: uppercase;
+                    color: var(--text-muted);
+                  "
+                >
+                  Answer
+                </div>
+                <span class="ai-source-badge">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <circle cx="10" cy="10" r="8" />
+                  </svg>
+                  <span x-text="result ? result.source : ''"></span>
+                </span>
+              </div>
+              <p
+                style="
+                  font-size: 15px;
+                  line-height: 1.6;
+                  color: var(--text-primary);
+                "
+                x-text="result?.answer"
+              ></p>
+              <!-- Data table -->
+              <div
+                x-show="result && result.data && result.data.rows && result.data.rows.length"
+                style="margin-top: 16px"
+              >
+                <div
+                  class="table-wrap card"
+                  style="border: 1.5px solid var(--border-soft)"
+                >
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <template
+                          x-if="result && result.data && result.data.rows && result.data.rows[0]"
+                        >
+                          <template
+                            x-for="key in Object.keys(result.data.rows[0])"
+                            :key="key"
+                          >
+                            <th x-text="key"></th>
+                          </template>
+                        </template>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template
+                        x-for="(row, i) in (result?.data?.rows ?? [])"
+                        :key="i"
+                      >
+                        <tr>
+                          <template x-for="key in Object.keys(row)" :key="key">
+                            <td
+                              x-text="typeof row[key] === 'number' ? (String(key).includes('total') || String(key).includes('income') || String(key).includes('expense') ? '$' + Number(row[key]).toFixed(2) : row[key]) : row[key]"
+                            ></td>
+                          </template>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- History -->
+            <div x-show="history.length > 1">
+              <div class="card-title" style="margin-bottom: 12px">
+                Previous Questions
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <template x-for="(item, i) in history.slice(1, 10)" :key="i">
+                  <div class="ai-bubble">
+                    <div
+                      class="text-muted text-sm"
+                      style="margin-bottom: 4px"
+                      x-text="item.q"
+                    ></div>
+                    <div style="font-size: 13.5px" x-text="item.a"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Empty -->
+            <div
+              x-show="!result && !history.length"
+              class="empty-state"
+              style="padding: 60px 0"
+            >
+              <div class="empty-state-icon">🤖</div>
+              <div class="empty-state-title">
+                Ask anything about your finances
+              </div>
+              <div class="empty-state-body">
+                Powered by Ollama (local) with Gemini fallback
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /ai -->
+
+        <!-- ══ RECURRING TRANSACTIONS ════════════════════════════════════════════ -->
+        <div
+          x-show="page==='recurring'"
+          x-data="recurringApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Recurring</div>
+              <div class="page-subtitle">
+                Bills, subscriptions & regular income
+              </div>
+            </div>
+            <div class="flex gap-2 items-center">
+              <label
+                class="flex items-center gap-2 text-sm text-muted"
+                style="cursor: pointer"
+              >
+                <input
+                  type="checkbox"
+                  x-model="showDismissed"
+                  @change="load()"
+                  style="accent-color: var(--blue)"
+                />
+                Show dismissed
+              </label>
+              <button
+                @click="detect()"
+                :disabled="detecting"
+                class="btn btn-primary"
+              >
+                <span x-show="!detecting">🔍 Detect Recurring</span>
+                <span x-show="detecting" class="flex items-center gap-2"
+                  ><span class="spinner"></span> Scanning…</span
+                >
+              </button>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <!-- Detection result message -->
+            <div
+              x-show="detectMsg"
+              class="alert alert-info"
+              style="margin-bottom: 16px"
+              x-text="detectMsg"
+            ></div>
+
+            <div
+              x-show="loading"
+              class="loading-pulse"
+              style="
+                padding: 40px;
+                text-align: center;
+                color: var(--text-muted);
+              "
+            >
+              Scanning transactions…
+            </div>
+
+            <div x-show="!loading">
+              <!-- Summary stat cards -->
+              <div
+                class="stat-grid"
+                style="margin-bottom: 24px"
+                x-show="items.length"
+              >
+                <div class="stat-card">
+                  <div class="stat-glow red"></div>
+                  <div class="stat-label">Monthly Bills</div>
+                  <div
+                    class="stat-value expense amount"
+                    x-text="fmtAbs(monthlyExpenseTotal)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    x-text="expenses.length + ' recurring expenses'"
+                  ></div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow green"></div>
+                  <div class="stat-label">Monthly Income</div>
+                  <div
+                    class="stat-value income amount"
+                    x-text="fmtAbs(monthlyIncomeTotal)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    x-text="income.length + ' recurring income sources'"
+                  ></div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow blue"></div>
+                  <div class="stat-label">Monthly Net</div>
+                  <div
+                    class="stat-value amount"
+                    :class="(monthlyIncomeTotal - monthlyExpenseTotal) >= 0 ? 'net-pos' : 'net-neg'"
+                    x-text="fmt(monthlyIncomeTotal - monthlyExpenseTotal)"
+                  ></div>
+                  <div class="stat-meta">Recurring net</div>
+                </div>
+              </div>
+
+              <!-- Expenses table -->
+              <div
+                class="card"
+                style="margin-bottom: 20px"
+                x-show="expenses.length"
+              >
+                <div class="card-pad" style="padding-bottom: 0">
+                  <div class="card-header">
+                    <div class="card-title" style="color: var(--red)">
+                      Bills & Subscriptions
+                    </div>
+                    <span
+                      class="text-xs text-muted"
+                      x-text="expenses.length + ' items'"
+                    ></span>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Merchant</th>
+                        <th>Category</th>
+                        <th>Frequency</th>
+                        <th style="text-align: right">Amount</th>
+                        <th style="text-align: right">Monthly Cost</th>
+                        <th>Next Due</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template x-for="item in expenses" :key="item.id">
+                        <tr>
+                          <td>
+                            <!-- View -->
+                            <template x-if="editingId !== item.id">
+                              <span
+                                style="font-weight: 500"
+                                x-text="item.merchant_clean"
+                              ></span>
+                            </template>
+                            <!-- Edit -->
+                            <template x-if="editingId === item.id">
+                              <div
+                                style="
+                                  display: flex;
+                                  flex-direction: column;
+                                  gap: 6px;
+                                  min-width: 200px;
+                                "
+                              >
+                                <div class="form-group">
+                                  <label class="form-label">Amount ($)</label>
+                                  <input
+                                    type="number"
+                                    x-model="editForm.amount"
+                                    step="0.01"
+                                    class="form-input"
+                                    style="width: 120px"
+                                  />
+                                </div>
+                                <div class="form-group">
+                                  <label class="form-label">Frequency</label>
+                                  <select
+                                    x-model="editForm.frequency"
+                                    class="form-select"
+                                  >
+                                    <option value="weekly">Weekly</option>
+                                    <option value="biweekly">
+                                      Every 2 weeks
+                                    </option>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="annual">Annual</option>
+                                    <option value="irregular">Irregular</option>
+                                  </select>
+                                </div>
+                                <div class="form-group">
+                                  <label class="form-label"
+                                    >Next expected</label
+                                  >
+                                  <input
+                                    type="date"
+                                    x-model="editForm.next_expected_date"
+                                    class="form-input"
+                                  />
+                                </div>
+                                <div class="flex gap-2">
+                                  <button
+                                    @click="saveEdit(item)"
+                                    class="btn btn-primary btn-xs"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    @click="editingId = null"
+                                    class="btn btn-ghost btn-xs"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </template>
+                          </td>
+                          <td>
+                            <span
+                              class="cat-pill"
+                              x-text="item.category"
+                            ></span>
+                          </td>
+                          <td
+                            class="text-muted text-sm"
+                            x-text="FREQ_LABELS[item.frequency] || item.frequency"
+                          ></td>
+                          <td
+                            class="mono-cell amount-expense"
+                            style="text-align: right"
+                            x-text="fmtAbs(item.amount)"
+                          ></td>
+                          <td
+                            class="mono-cell text-muted"
+                            style="text-align: right"
+                            x-text="fmtAbs(_toMonthly(item.amount, item.frequency))"
+                          ></td>
+                          <td>
+                            <span
+                              :class="dueSoonClass(item.next_expected_date)"
+                              style="font-size: 12.5px; font-weight: 500"
+                              x-text="dueSoonLabel(item.next_expected_date)"
+                            ></span>
+                          </td>
+                          <td>
+                            <span
+                              :class="statusBadge(item.status)"
+                              x-text="item.status"
+                            ></span>
+                          </td>
+                          <td>
+                            <div
+                              class="flex gap-1"
+                              x-show="editingId !== item.id"
+                            >
+                              <button
+                                x-show="item.status !== 'confirmed'"
+                                @click="confirm(item)"
+                                class="btn btn-xs badge-ok"
+                                style="
+                                  background: var(--green-light);
+                                  color: var(--green);
+                                  border: none;
+                                "
+                                title="Confirm"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                @click="startEdit(item)"
+                                class="btn btn-ghost btn-xs"
+                                title="Edit"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                @click="dismiss(item)"
+                                class="btn btn-ghost btn-xs text-muted"
+                                title="Dismiss"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Income table -->
+              <div class="card" x-show="income.length">
+                <div class="card-pad" style="padding-bottom: 0">
+                  <div class="card-header">
+                    <div class="card-title" style="color: var(--green)">
+                      Regular Income
+                    </div>
+                    <span
+                      class="text-xs text-muted"
+                      x-text="income.length + ' items'"
+                    ></span>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Source</th>
+                        <th>Category</th>
+                        <th>Frequency</th>
+                        <th style="text-align: right">Amount</th>
+                        <th style="text-align: right">Monthly</th>
+                        <th>Next Expected</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template x-for="item in income" :key="item.id">
+                        <tr>
+                          <td
+                            style="font-weight: 500"
+                            x-text="item.merchant_clean"
+                          ></td>
+                          <td>
+                            <span
+                              class="cat-pill"
+                              x-text="item.category"
+                            ></span>
+                          </td>
+                          <td
+                            class="text-muted text-sm"
+                            x-text="FREQ_LABELS[item.frequency] || item.frequency"
+                          ></td>
+                          <td
+                            class="mono-cell amount-income"
+                            style="text-align: right"
+                            x-text="fmtAbs(item.amount)"
+                          ></td>
+                          <td
+                            class="mono-cell text-muted"
+                            style="text-align: right"
+                            x-text="fmtAbs(_toMonthly(item.amount, item.frequency))"
+                          ></td>
+                          <td
+                            class="text-muted text-sm"
+                            x-text="item.next_expected_date || '—'"
+                          ></td>
+                          <td>
+                            <span
+                              :class="statusBadge(item.status)"
+                              x-text="item.status"
+                            ></span>
+                          </td>
+                          <td>
+                            <div class="flex gap-1">
+                              <button
+                                x-show="item.status !== 'confirmed'"
+                                @click="confirm(item)"
+                                class="btn btn-xs"
+                                style="
+                                  background: var(--green-light);
+                                  color: var(--green);
+                                  border: none;
+                                "
+                              >
+                                ✓
+                              </button>
+                              <button
+                                @click="dismiss(item)"
+                                class="btn btn-ghost btn-xs text-muted"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Empty state -->
+              <div
+                x-show="!items.length && !loading"
+                class="empty-state"
+                style="padding: 80px 0"
+              >
+                <div class="empty-state-icon">🔄</div>
+                <div class="empty-state-title">
+                  No recurring transactions detected
+                </div>
+                <div class="empty-state-body">
+                  Click <strong>🔍 Detect Recurring</strong> to scan your
+                  transactions for patterns.
+                </div>
+                <div class="text-xs text-muted" style="margin-top: 8px">
+                  You need at least 2 months of transactions for detection to
+                  work.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /recurring -->
+
+        <!-- ══ CASHFLOW FORECAST ══════════════════════════════════════════════════ -->
+        <div
+          x-show="page==='forecast'"
+          x-data="forecastApp()"
+          x-init="init()"
+          x-cloak
+          class="page-enter"
+        >
+          <div class="page-header">
+            <div>
+              <div class="page-title">Cashflow Forecast</div>
+              <div class="page-subtitle">
+                Projected income &amp; expenses based on recurring transactions
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2">
+                <span class="text-muted text-sm">Next</span>
+                <select
+                  x-model="days"
+                  @change="load()"
+                  class="form-select"
+                  style="width: 110px"
+                >
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-body">
+            <div
+              x-show="loading"
+              class="loading-pulse"
+              style="
+                padding: 40px;
+                text-align: center;
+                color: var(--text-muted);
+              "
+            >
+              Building forecast…
+            </div>
+
+            <div x-show="!loading && forecast">
+              <!-- Projected totals -->
+              <div class="stat-grid" style="margin-bottom: 24px">
+                <div class="stat-card">
+                  <div class="stat-glow red"></div>
+                  <div class="stat-label">Projected Expenses</div>
+                  <div
+                    class="stat-value expense amount"
+                    x-text="fmtAbs(totalProjectedExpenses)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    x-text="'Over next ' + days + ' days'"
+                  ></div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow green"></div>
+                  <div class="stat-label">Projected Income</div>
+                  <div
+                    class="stat-value income amount"
+                    x-text="fmtAbs(totalProjectedIncome)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    x-text="'Over next ' + days + ' days'"
+                  ></div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-glow blue"></div>
+                  <div class="stat-label">Net Cashflow</div>
+                  <div
+                    class="stat-value amount"
+                    :class="(totalProjectedIncome - totalProjectedExpenses) >= 0 ? 'net-pos' : 'net-neg'"
+                    x-text="fmt(totalProjectedIncome - totalProjectedExpenses)"
+                  ></div>
+                  <div
+                    class="stat-meta"
+                    x-text="'Over next ' + days + ' days'"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- Main chart -->
+              <div class="card card-pad" style="margin-bottom: 20px">
+                <div class="card-header">
+                  <div class="card-title">Running Cash Flow</div>
+                  <div class="text-xs text-muted">
+                    Dots = payment/income events · Hover for details
+                  </div>
+                </div>
+                <div style="height: 280px">
+                  <canvas id="forecastChart"></canvas>
+                </div>
+              </div>
+
+              <!-- Two-column: upcoming bills + monthly breakdown -->
+              <div class="grid-2">
+                <!-- Upcoming bills -->
+                <div class="card card-pad">
+                  <div class="card-header">
+                    <div class="card-title">Upcoming Bills</div>
+                    <span class="text-xs text-muted">Next 8</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 0">
+                    <template x-for="(bill, i) in upcomingBills" :key="i">
+                      <div
+                        style="
+                          display: flex;
+                          align-items: center;
+                          justify-content: space-between;
+                          padding: 10px 0;
+                          border-bottom: 1px solid var(--border-soft);
+                        "
+                      >
+                        <div>
+                          <div
+                            style="font-weight: 500; font-size: 13.5px"
+                            x-text="bill.merchant"
+                          ></div>
+                          <div
+                            class="text-xs text-muted"
+                            x-text="bill.category + ' · ' + bill.frequency"
+                          ></div>
+                        </div>
+                        <div style="text-align: right">
+                          <div
+                            class="mono-cell amount-expense"
+                            style="font-size: 13.5px"
+                            x-text="fmtAbs(bill.amount)"
+                          ></div>
+                          <div
+                            class="text-xs"
+                            :class="urgencyClass(bill.date)"
+                            x-text="dueSoonLabel(bill.date) + ' (' + formatDate(bill.date) + ')'"
+                          ></div>
+                        </div>
+                      </div>
+                    </template>
+                    <div
+                      x-show="!upcomingBills.length"
+                      class="text-muted text-sm"
+                      style="padding: 20px 0; text-align: center"
+                    >
+                      No upcoming bills. Confirm recurring transactions first.
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Monthly breakdown -->
+                <div class="card card-pad">
+                  <div class="card-header">
+                    <div class="card-title">Monthly Breakdown</div>
+                  </div>
+                  <div x-show="monthlySummary.length">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Month</th>
+                          <th style="text-align: right">Income</th>
+                          <th style="text-align: right">Bills</th>
+                          <th style="text-align: right">Net</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <template x-for="m in monthlySummary" :key="m.month">
+                          <tr>
+                            <td
+                              style="font-weight: 500; font-size: 13px"
+                              x-text="m.month"
+                            ></td>
+                            <td
+                              class="mono-cell amount-income"
+                              style="text-align: right"
+                              x-text="fmtAbs(m.income)"
+                            ></td>
+                            <td
+                              class="mono-cell amount-expense"
+                              style="text-align: right"
+                              x-text="fmtAbs(m.expenses)"
+                            ></td>
+                            <td
+                              class="mono-cell"
+                              style="text-align: right"
+                              :class="m.net >= 0 ? 'amount-income' : 'amount-expense'"
+                              x-text="fmt(m.net)"
+                            ></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div
+                    x-show="!monthlySummary.length"
+                    class="empty-state"
+                    style="padding: 32px 0"
+                  >
+                    <div class="empty-state-body">
+                      No recurring transactions confirmed yet.
+                    </div>
+                    <div class="text-xs text-muted" style="margin-top: 6px">
+                      Go to <strong>Recurring</strong> and confirm your bills.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- All events list -->
+              <div
+                class="card"
+                style="margin-top: 20px"
+                x-show="forecast && forecast.events.length"
+              >
+                <div class="card-pad" style="padding-bottom: 0">
+                  <div class="card-header">
+                    <div class="card-title">All Projected Events</div>
+                    <span
+                      class="text-xs text-muted"
+                      x-text="(forecast?.events?.length ?? 0) + ' events'"
+                    ></span>
+                  </div>
+                </div>
+                <div
+                  class="table-wrap"
+                  style="max-height: 360px; overflow-y: auto"
+                >
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Merchant</th>
+                        <th>Category</th>
+                        <th>Frequency</th>
+                        <th style="text-align: right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template
+                        x-for="(ev, i) in (forecast?.events ?? [])"
+                        :key="i"
+                      >
+                        <tr>
+                          <td
+                            class="text-muted text-sm"
+                            style="white-space: nowrap"
+                            x-text="ev.date"
+                          ></td>
+                          <td
+                            style="font-weight: 500"
+                            x-text="ev.merchant"
+                          ></td>
+                          <td>
+                            <span class="cat-pill" x-text="ev.category"></span>
+                          </td>
+                          <td
+                            class="text-muted text-sm"
+                            x-text="ev.frequency"
+                          ></td>
+                          <td
+                            class="mono-cell"
+                            style="text-align: right"
+                            :class="ev.is_income ? 'amount-income' : 'amount-expense'"
+                            x-text="(ev.is_income ? '+' : '-') + fmtAbs(ev.amount)"
+                          ></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty if no forecast data -->
+            <div
+              x-show="!loading && (!forecast || !forecast.events.length)"
+              class="empty-state"
+              style="padding: 80px 0"
+            >
+              <div class="empty-state-icon">📅</div>
+              <div class="empty-state-title">No forecast data yet</div>
+              <div class="empty-state-body">
+                Go to <strong>Recurring</strong>, detect your patterns, and
+                confirm your bills to generate a forecast.
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /forecast -->
+      </main>
+    </div>
+
+    <style>
+      .spin-anim {
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .grid-12px {
+        gap: 12px;
+      }
+    </style>
     <script src="/static/app.js"></script>
+    <script src="/static/recurring.js"></script>
   </body>
 </html>
