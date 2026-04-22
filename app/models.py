@@ -1,11 +1,19 @@
-from datetime import date, datetime
-from typing import Optional
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Float, ForeignKey,
-    Integer, String, Text, UniqueConstraint, func,
+    Column, String, Float, DateTime,
+    Boolean, Text, Integer, func, Date, UniqueConstraint, ForeignKey
 )
+from datetime import datetime
+import uuid
 from app.database import Base
-
+class PlaidItem(Base):
+    __tablename__ = "plaid_items"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    institution_id = Column(String)
+    institution_name = Column(String)
+    access_token = Column(String, unique=True)
+    item_id = Column(String, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_synced = Column(DateTime, nullable=True)
 
 class Account(Base):
     __tablename__ = "accounts"
@@ -15,7 +23,6 @@ class Account(Base):
     type = Column(String, nullable=False)  # checking/savings/credit/investment
     institution = Column(String)
     created_at = Column(DateTime, default=func.now())
-
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -34,6 +41,36 @@ class Transaction(Base):
     is_excluded = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
 
+class RecurringTransaction(Base):
+    """
+    A detected recurring bill or subscription.
+    One row per unique merchant+amount pattern.
+    """
+    __tablename__ = "recurring_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    merchant_clean = Column(String, nullable=False, unique=True)
+    category = Column(String, default="Uncategorized")
+
+    amount = Column(Float, nullable=False)
+    is_income = Column(Boolean, default=False)
+
+    # "monthly" | "weekly" | "biweekly" | "annual" | "irregular"
+    frequency = Column(String, default="monthly")
+
+    typical_day = Column(Integer)
+
+    # "detected" | "confirmed" | "dismissed"
+    status = Column(String, default="detected")
+
+    last_seen_date = Column(Date)
+    next_expected_date = Column(Date)
+    occurrences = Column(Integer, default=0)
+    notes = Column(Text)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class BudgetRule(Base):
     __tablename__ = "budget_rules"
@@ -79,20 +116,6 @@ class Category(Base):
     parent_name = Column(String, ForeignKey("categories.name"))
     color = Column(String, default="#9ca3af")
     icon = Column(String, default="tag")
-
-
-class PlaidItem(Base):
-    """One row per connected institution (bank login)."""
-    __tablename__ = "plaid_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    item_id = Column(String, nullable=False, unique=True)      # Plaid item_id
-    access_token = Column(String, nullable=False)              # never expose to frontend
-    institution_id = Column(String)
-    institution_name = Column(String)
-    last_synced = Column(DateTime)
-    created_at = Column(DateTime, default=func.now())
-
 
 class PlaidAccount(Base):
     """One row per account within a PlaidItem."""

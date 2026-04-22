@@ -123,7 +123,7 @@ class CategoryOut(BaseModel):
 
 class PlaidItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: int
+    id: str
     institution_name: Optional[str]
     institution_id: Optional[str]
     last_synced: Optional[str]
