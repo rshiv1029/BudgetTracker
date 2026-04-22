@@ -112,7 +112,7 @@ async def exchange_token(
 
 
 @router.post("/sync/{item_id}", response_model=PlaidSyncResult)
-async def sync_item(item_id: int, days_back: int = 90, db: Session = Depends(get_db)):
+async def sync_item(item_id: str, days_back: int = 90, db: Session = Depends(get_db)):
     item = db.query(PlaidItem).filter(PlaidItem.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")
@@ -151,7 +151,7 @@ def list_items(db: Session = Depends(get_db)):
 
 
 @router.delete("/items/{item_id}", status_code=204)
-def delete_item(item_id: int, db: Session = Depends(get_db)):
+def delete_item(item_id: str, db: Session = Depends(get_db)):
     item = db.query(PlaidItem).filter(PlaidItem.id == item_id).first()
     if not item:
         raise HTTPException(404, "Item not found")

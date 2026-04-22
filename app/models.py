@@ -122,7 +122,7 @@ class PlaidAccount(Base):
     __tablename__ = "plaid_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
-    plaid_item_id = Column(Integer, ForeignKey("plaid_items.id"), nullable=False)
+    plaid_item_id = Column(String, ForeignKey("plaid_items.id"), nullable=False)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
     plaid_account_id = Column(String, nullable=False, unique=True)  # Plaid's account_id
     mask = Column(String)       # last 4 digits
