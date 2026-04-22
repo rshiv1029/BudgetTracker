@@ -569,18 +569,10 @@ function netWorthApp() {
       await this.load();
     },
 
-    get assets() {
-      return (this.latest?.accounts ?? []).filter(a => (a.balance ?? 0) > 0);
-    },
-    get liabilities() {
-      return (this.latest?.accounts ?? []).filter(a => (a.balance ?? 0) < 0);
-    },
-    get totalAssets() {
-      return this.assets.reduce((s, a) => s + (a.balance ?? 0), 0);
-    },
-    get totalLiabilities() {
-      return this.liabilities.reduce((s, a) => s + (a.balance ?? 0), 0);
-    },
+    get assets() { return (this.latest?.accounts ?? []).filter(a => (a.balance ?? 0) > 0); },
+    get liabilities() { return (this.latest?.accounts ?? []).filter(a => (a.balance ?? 0) < 0); },
+    get totalAssets() { return this.assets.reduce((s, a) => s + (a.balance ?? 0), 0); },
+    get totalLiabilities() { return this.liabilities.reduce((s, a) => s + (a.balance ?? 0), 0); },
 
     fmt, fmtAbs,
   };
@@ -625,7 +617,7 @@ function aiApp() {
   };
 }
 
-// ── Recurring Transactions ─────────────────────────────────────────────────
+/* ── Recurring Transactions ─────────────────────────────────────────────── */
 function recurringApp() {
   return {
     items: [],
@@ -651,9 +643,7 @@ function recurringApp() {
     async load() {
       this.loading = true;
       try {
-        this.items = await api.get(
-          `/api/recurring?include_dismissed=${this.showDismissed}`
-        );
+        this.items = await api.get(`/api/recurring?include_dismissed=${this.showDismissed}`);
       } catch (e) {
         console.error(e);
       }
@@ -711,23 +701,14 @@ function recurringApp() {
       await this.load();
     },
 
-    get expenses() {
-      return this.items.filter(i => !i.is_income);
-    },
-    get income() {
-      return this.items.filter(i => i.is_income);
-    },
+    get expenses() { return this.items.filter(i => !i.is_income); },
+    get income() { return this.items.filter(i => i.is_income); },
+
     get monthlyExpenseTotal() {
-      return this.expenses.reduce((s, i) => {
-        const monthly = this._toMonthly(i.amount, i.frequency);
-        return s + monthly;
-      }, 0);
+      return this.expenses.reduce((s, i) => s + this._toMonthly(i.amount, i.frequency), 0);
     },
     get monthlyIncomeTotal() {
-      return this.income.reduce((s, i) => {
-        const monthly = this._toMonthly(i.amount, i.frequency);
-        return s + monthly;
-      }, 0);
+      return this.income.reduce((s, i) => s + this._toMonthly(i.amount, i.frequency), 0);
     },
 
     _toMonthly(amount, freq) {
@@ -737,8 +718,7 @@ function recurringApp() {
 
     daysUntil(dateStr) {
       if (!dateStr) return null;
-      const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
-      return diff;
+      return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
     },
 
     dueSoonClass(dateStr) {
@@ -759,19 +739,14 @@ function recurringApp() {
     },
 
     statusBadge(status) {
-      return {
-        detected: 'badge badge-warning',
-        confirmed: 'badge badge-ok',
-        dismissed: 'badge',
-      }[status] || 'badge';
+      return { detected: 'badge badge-warning', confirmed: 'badge badge-ok', dismissed: 'badge' }[status] || 'badge';
     },
 
     fmtAbs, fmt,
   };
 }
 
-/* ── Cashflow Forecast ─────────────────────────────────────────────────────── */
-
+/* ── Cashflow Forecast ──────────────────────────────────────────────────── */
 function forecastApp() {
   return {
     forecast: null,
@@ -800,49 +775,37 @@ function forecastApp() {
       if (this.chart) this.chart.destroy();
 
       const daily = this.forecast.daily;
-
-      // Only show days where something happens or sample every 3 days for smoothness
       const labels = daily.map(d => d.date);
       const balances = daily.map(d => d.running_balance);
-
-      // Find event dates for annotation dots
       const eventDates = new Set(this.forecast.events.map(e => e.date));
 
       this.chart = new Chart(el, {
         type: 'line',
         data: {
           labels,
-          datasets: [
-            {
-              label: 'Projected Cash Flow',
-              data: balances,
-              borderColor: ctx => {
-                const val = ctx.dataset.data[ctx.dataIndex];
-                return val >= 0 ? '#16a34a' : '#dc2626';
-              },
-              segment: {
-                borderColor: ctx => {
-                  const val = ctx.p1.parsed.y;
-                  return val >= 0 ? '#16a34a' : '#dc2626';
-                },
-              },
-              backgroundColor: ctx => {
-                const chart = ctx.chart;
-                const { ctx: canvasCtx, chartArea } = chart;
-                if (!chartArea) return 'transparent';
-                const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                g.addColorStop(0, 'rgba(22,163,74,0.12)');
-                g.addColorStop(0.5, 'rgba(22,163,74,0.03)');
-                g.addColorStop(1, 'rgba(220,38,38,0.06)');
-                return g;
-              },
-              fill: true,
-              tension: 0.3,
-              pointRadius: ctx => eventDates.has(labels[ctx.dataIndex]) ? 4 : 0,
-              pointHoverRadius: 6,
-              borderWidth: 2,
+          datasets: [{
+            label: 'Projected Cash Flow',
+            data: balances,
+            borderColor: '#16a34a',
+            segment: {
+              borderColor: ctx => ctx.p1.parsed.y >= 0 ? '#16a34a' : '#dc2626',
             },
-          ],
+            backgroundColor: ctx => {
+              const chart = ctx.chart;
+              const { ctx: canvasCtx, chartArea } = chart;
+              if (!chartArea) return 'transparent';
+              const g = canvasCtx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              g.addColorStop(0, 'rgba(22,163,74,0.12)');
+              g.addColorStop(0.5, 'rgba(22,163,74,0.03)');
+              g.addColorStop(1, 'rgba(220,38,38,0.06)');
+              return g;
+            },
+            fill: true,
+            tension: 0.3,
+            pointRadius: ctx => eventDates.has(labels[ctx.dataIndex]) ? 4 : 0,
+            pointHoverRadius: 6,
+            borderWidth: 2,
+          }],
         },
         options: {
           plugins: {
@@ -858,9 +821,7 @@ function forecastApp() {
                   const dateStr = items[0]?.label;
                   const eventsOnDay = (this.forecast?.events ?? []).filter(e => e.date === dateStr);
                   if (!eventsOnDay.length) return [];
-                  return ['', ...eventsOnDay.map(e =>
-                    `${e.is_income ? '↑' : '↓'} ${e.merchant} $${e.amount.toFixed(2)}`
-                  )];
+                  return ['', ...eventsOnDay.map(e => `${e.is_income ? '↑' : '↓'} ${e.merchant} $${e.amount.toFixed(2)}`)];
                 },
               },
             },
@@ -868,17 +829,14 @@ function forecastApp() {
           scales: {
             y: {
               grid: { color: 'rgba(0,0,0,0.04)' },
-              ticks: {
-                callback: v => (v >= 0 ? '+' : '') + '$' + Math.abs(v).toLocaleString(),
-              },
+              ticks: { callback: v => (v >= 0 ? '+' : '') + '$' + Math.abs(v).toLocaleString() },
             },
             x: {
               grid: { display: false },
               ticks: {
                 maxTicksLimit: 12,
-                callback: function(val, idx) {
-                  const label = this.getLabelForValue(val);
-                  const d = new Date(label);
+                callback: function(val) {
+                  const d = new Date(this.getLabelForValue(val));
                   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 },
               },
@@ -889,23 +847,10 @@ function forecastApp() {
       });
     },
 
-    get upcomingBills() {
-      return (this.forecast?.upcoming_bills ?? []).slice(0, 8);
-    },
-
-    get monthlySummary() {
-      return this.forecast?.monthly_summary ?? [];
-    },
-
-    get totalProjectedExpenses() {
-      return this.monthlySummary.reduce((s, m) => s + m.expenses, 0);
-    },
-
-    get totalProjectedIncome() {
-      return this.monthlySummary.reduce((s, m) => s + m.income, 0);
-    },
-
-    fmtAbs, fmt,
+    get upcomingBills() { return (this.forecast?.upcoming_bills ?? []).slice(0, 8); },
+    get monthlySummary() { return this.forecast?.monthly_summary ?? []; },
+    get totalProjectedExpenses() { return this.monthlySummary.reduce((s, m) => s + m.expenses, 0); },
+    get totalProjectedIncome() { return this.monthlySummary.reduce((s, m) => s + m.income, 0); },
 
     formatDate(dateStr) {
       if (!dateStr) return '—';
@@ -933,5 +878,7 @@ function forecastApp() {
       if (d <= 7) return 'text-amber';
       return 'text-muted';
     },
+
+    fmtAbs, fmt,
   };
 }

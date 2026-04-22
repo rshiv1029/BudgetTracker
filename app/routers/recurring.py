@@ -14,7 +14,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -28,6 +28,8 @@ router = APIRouter(prefix="/api/recurring", tags=["recurring"])
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class RecurringOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     merchant_clean: str
     category: str
@@ -40,9 +42,6 @@ class RecurringOut(BaseModel):
     next_expected_date: Optional[date]
     occurrences: int
     notes: Optional[str]
-
-    class Config:
-        from_attributes = True
 
 
 class RecurringUpdate(BaseModel):
@@ -71,7 +70,7 @@ def run_detection(db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[RecurringOut])
 def list_recurring(
-    status: Optional[str] = None,       # filter by status
+    status: Optional[str] = None,
     include_dismissed: bool = False,
     db: Session = Depends(get_db),
 ):
