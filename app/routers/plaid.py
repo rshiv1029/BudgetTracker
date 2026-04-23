@@ -10,6 +10,7 @@ Endpoints:
   GET  /api/plaid/items             — list connected institutions
   DELETE /api/plaid/items/{item_id} — disconnect an institution
 """
+import asyncio
 import hashlib
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -162,14 +163,11 @@ def delete_item(item_id: str, db: Session = Depends(get_db)):
 # ── core sync logic ───────────────────────────────────────────────────────────
 
 async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> PlaidSyncResult:
-    """Fetch accounts + transactions from Plaid, upsert into local DB."""
-
     # ── 1. Sync accounts ──────────────────────────────────────────────────────
     plaid_accounts_raw = pc.get_accounts(item.access_token)
-    account_id_map: dict[str, int] = {}  # plaid_account_id → local account.id
+    account_id_map: dict[str, int] = {}
 
     for pa in plaid_accounts_raw:
-        # Check if we already track this Plaid account
         existing_pa = db.query(PlaidAccount).filter(
             PlaidAccount.plaid_account_id == pa["plaid_account_id"]
         ).first()
@@ -177,9 +175,7 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
         if existing_pa:
             local_acct = db.query(Account).filter(Account.id == existing_pa.account_id).first()
         else:
-            # Create a new local Account
             acct_name = f"{item.institution_name} — {pa['name']}"
-            # Avoid duplicate name collision
             existing_acct = db.query(Account).filter(Account.name == acct_name).first()
             if existing_acct:
                 local_acct = existing_acct
@@ -204,7 +200,6 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
 
         account_id_map[pa["plaid_account_id"]] = local_acct.id
 
-        # Record balance snapshot
         balance = pa.get("balance_current")
         if balance is not None:
             snap = NetWorthSnapshot(
@@ -214,19 +209,30 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
             )
             db.add(snap)
 
-    # ── 2. Sync transactions ──────────────────────────────────────────────────
+    # ── 2. Sync transactions (with retry for PRODUCT_NOT_READY) ──────────────
     end_date = date.today()
     start_date = end_date - timedelta(days=days_back)
 
-    raw_txns = pc.get_transactions(item.access_token, start_date=start_date, end_date=end_date)
+    raw_txns = []
+    for attempt in range(5):
+        try:
+            raw_txns = pc.get_transactions(item.access_token, start_date=start_date, end_date=end_date)
+            break
+        except Exception as e:
+            if "PRODUCT_NOT_READY" in str(e) and attempt < 4:
+                wait = (attempt + 1) * 3  # 3s, 6s, 9s, 12s
+                await asyncio.sleep(wait)
+                continue
+            raise
 
+    # ── 3. Import transactions ────────────────────────────────────────────────
     imported = 0
     duplicates = 0
     new_ids = []
 
     for t in raw_txns:
         if t["pending"]:
-            continue  # skip pending
+            continue
 
         local_account_id = account_id_map.get(t["plaid_account_id"])
         if not local_account_id:
@@ -239,15 +245,22 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
             continue
 
         merchant = t.get("merchant_name") or t["description"]
+        # Detect transfers via Plaid's category hint
+        plaid_cats = t.get("plaid_category", [])
+        is_transfer = any(
+            c.lower() in ("transfer", "payment", "deposit", "internal account transfer")
+            for c in plaid_cats
+        )
+
         txn = Transaction(
             import_hash=import_hash,
             date=t["date"],
             description=t["description"],
             merchant_clean=merchant,
             amount=t["amount"],
-            category="Uncategorized",
+            category="Transfer" if is_transfer else "Uncategorized",
             account_id=local_account_id,
-            is_transfer=False,
+            is_transfer=is_transfer,
             is_excluded=False,
         )
         db.add(txn)
@@ -255,7 +268,7 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
         new_ids.append(txn.id)
         imported += 1
 
-    # ── 3. AI categorization ──────────────────────────────────────────────────
+    # ── 4. AI categorization ──────────────────────────────────────────────────
     if new_ids:
         await categorize_transactions(new_ids, db)
 

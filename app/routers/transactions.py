@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.services.transfer_detector import detect_and_flag_transfers
 from app.models import Category, CategoryRule, Transaction
 from app.schemas import (
     CategoryOut, CategoryRuleCreate, CategoryRuleOut,
@@ -122,3 +123,32 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Rule not found")
     db.delete(obj)
     db.commit()
+
+# ── Internal Transfer Detection ─────────────────────────────────────────────
+@router.post("/detect-transfers")
+def detect_transfers(db: Session = Depends(get_db)):
+    flagged = detect_and_flag_transfers(db)
+    return {"flagged": flagged, "message": f"Flagged {flagged} transactions as transfers"}
+
+@router.get("/debug-transfers")
+def debug_transfers(db: Session = Depends(get_db)):
+    from app.models import Transaction
+    txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.is_excluded == False,
+            Transaction.is_transfer == False,
+        )
+        .order_by(Transaction.date.asc())
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "date": str(t.date),
+            "description": t.description,
+            "amount": t.amount,
+            "account_id": t.account_id,
+        }
+        for t in txns
+    ]
