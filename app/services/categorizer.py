@@ -53,7 +53,7 @@ Respond with a JSON array only — no explanation, no markdown. The array must h
 [{{"index": 1, "category": "Groceries"}}, {{"index": 2, "category": "Income"}}]"""
 
 
-def _parse_ai_response(response: str, count: int) -> dict[int, str]:
+def _parse_ai_response(response: str) -> dict[int, str]:
     """Parse AI JSON array into index->category map."""
     # Strip markdown code fences if present
     response = re.sub(r"```(?:json)?", "", response).strip()
@@ -89,7 +89,7 @@ async def categorize_transactions(transaction_ids: list[int], db: Session) -> in
 
         try:
             response_text, _ = await ai_client.complete(prompt)
-            index_map = _parse_ai_response(response_text, len(batch))
+            index_map = _parse_ai_response(response_text)
         except Exception:
             index_map = {}
 
@@ -97,9 +97,10 @@ async def categorize_transactions(transaction_ids: list[int], db: Session) -> in
             ai_category = index_map.get(j + 1)
             if ai_category and ai_category in category_set:
                 txn.category = ai_category
-            else:
-                txn.category = "Uncategorized"
-            updated += 1
+                updated += 1
+            elif txn.category == "Uncategorized":
+                # Only count as updated if we tried but AI failed on an uncategorized txn
+                updated += 1
 
     db.commit()
     return updated

@@ -73,7 +73,7 @@ def get_latest_balances(db: Session = Depends(get_db)):
         })
     total = sum(
         r["balance"] for r in result
-        if r["balance"] is not None and r["balance"] > 0  # exclude credit (negative)
+        if r["balance"] is not None
     )
     return {"accounts": result, "total_net_worth": round(total, 2)}
 

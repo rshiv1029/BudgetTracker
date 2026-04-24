@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -11,7 +12,17 @@ from fastapi.responses import FileResponse, Response
 from app.database import init_db
 from app.routers import transactions, budgets, net_worth, ai, plaid, recurring
 
-app = FastAPI(title="Finance App", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("uploads", exist_ok=True)
+    init_db()
+    yield
+    # Shutdown (if needed)
+
+
+app = FastAPI(title="Finance App", version="1.0.0", lifespan=lifespan)
 
 # Register routers
 app.include_router(transactions.router)
@@ -24,13 +35,6 @@ app.include_router(recurring.router)
 # Static files
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-@app.on_event("startup")
-def startup():
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("uploads", exist_ok=True)
-    init_db()
 
 
 @app.get("/")

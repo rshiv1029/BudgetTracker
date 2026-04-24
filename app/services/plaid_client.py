@@ -26,7 +26,7 @@ from plaid.model.products import Products
 
 PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID", "")
 PLAID_SECRET = os.getenv("PLAID_SECRET", "")
-PLAID_ENV = os.getenv("PLAID_ENV", "sandbox").lower()
+PLAID_ENV = os.getenv("PLAID_ENV", "development").lower()
 
 _ENV_MAP = {
     "sandbox": plaid.Environment.Sandbox,

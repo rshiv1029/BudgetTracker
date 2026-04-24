@@ -128,6 +128,7 @@ function financeApp() {
 
     navigate(p) {
       this.page = p;
+      window.dispatchEvent(new CustomEvent("page-changed", { detail: p }));
     },
 
     async syncAll() {
@@ -159,13 +160,15 @@ function dashboardApp() {
     loading: true,
     month_year: currentMonthYear(),
     charts: {},
+    _loading: false,
 
     async init() {
       await this.load();
     },
 
     async load() {
-      this.loading = true;
+      if (this._loading) return;
+      this._loading = true;
       try {
         const [ins, budgets] = await Promise.all([
           api.get("/api/ai/insights?months=3"),
@@ -173,13 +176,18 @@ function dashboardApp() {
         ]);
         this.insights = ins;
         this.budgetStatus = budgets;
-        this.loading = false; // set false FIRST
+        this.loading = false;
         await this.$nextTick();
-        await new Promise((r) => setTimeout(r, 50)); // let DOM paint
-        this.renderCharts();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.renderCharts();
+          });
+        });
       } catch (e) {
         console.error(e);
         this.loading = false;
+      } finally {
+        this._loading = false;
       }
     },
 
@@ -209,7 +217,7 @@ function dashboardApp() {
 
     renderCategoryPie() {
       const el = document.getElementById("catPieChart");
-      if (!el) return;
+      if (!el || el.offsetParent === null) return;
       const data = (this.insights.category_breakdown || []).slice(0, 8);
       if (!data.length) return;
       const colors = [
@@ -236,6 +244,8 @@ function dashboardApp() {
           ],
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: {
               position: "right",
@@ -254,7 +264,7 @@ function dashboardApp() {
 
     renderIncomeBar() {
       const el = document.getElementById("incomeBarChart");
-      if (!el) return;
+      if (!el || el.offsetParent === null) return;
       const data = this.insights.income_vs_expenses || [];
       if (!data.length) return;
       this.charts.bar = new Chart(el, {
@@ -279,6 +289,8 @@ function dashboardApp() {
           ],
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           plugins: { legend: { position: "top" } },
           scales: {
             y: { beginAtZero: true, grid: { color: "rgba(0,0,0,0.04)" } },
@@ -574,7 +586,7 @@ function budgetsApp() {
 
     renderChart() {
       const el = document.getElementById("budgetRadarChart");
-      if (!el || !this.status.length) return;
+      if (!el || el.offsetParent === null || !this.status.length) return;
       if (this.chart) this.chart.destroy();
       const items = this.status.slice(0, 8);
       this.chart = new Chart(el, {
@@ -700,7 +712,7 @@ function netWorthApp() {
 
     renderChart() {
       const el = document.getElementById("netWorthChart");
-      if (!el || !this.history.length) return;
+      if (!el || el.offsetParent === null || !this.history.length) return;
       if (this.chart) this.chart.destroy();
       this.chart = new Chart(el, {
         type: "line",
@@ -726,6 +738,8 @@ function netWorthApp() {
           ],
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -1013,7 +1027,7 @@ function forecastApp() {
 
     renderChart() {
       const el = document.getElementById("forecastChart");
-      if (!el || !this.forecast) return;
+      if (!el || el.offsetParent === null || !this.forecast) return;
       if (this.chart) this.chart.destroy();
 
       const daily = this.forecast.daily;

@@ -37,8 +37,8 @@ class Transaction(Base):
     subcategory = Column(String)
     account_id = Column(Integer, ForeignKey("accounts.id"))
     notes = Column(Text)
-    is_transfer = Column(Boolean, default=False)
-    is_excluded = Column(Boolean, default=False)
+    is_transfer = Column(Boolean, default=False, index=True)
+    is_excluded = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime, default=func.now())
 
 class RecurringTransaction(Base):

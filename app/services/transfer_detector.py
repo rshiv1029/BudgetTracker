@@ -45,7 +45,9 @@ def detect_and_flag_transfers(db: Session) -> int:
                 continue
 
             # Must be different accounts (or same account for credit card payments)
-            # Flag both
+            if t1.account_id == t2.account_id:
+                continue
+            # Flag both as transfers
             t1.is_transfer = True
             t2.is_transfer = True
             t1.category = "Transfer"

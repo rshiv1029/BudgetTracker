@@ -601,6 +601,12 @@ html, body {
 /* ── Chart containers ────────────────────────────────────────────────────── */
 .chart-wrap {
   position: relative;
+  width: 100%;
+}
+
+.chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── Transaction row edit ────────────────────────────────────────────────── */

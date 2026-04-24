@@ -12,7 +12,7 @@ Endpoints:
 """
 import asyncio
 import hashlib
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -202,12 +202,20 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
 
         balance = pa.get("balance_current")
         if balance is not None:
-            snap = NetWorthSnapshot(
-                account_id=local_acct.id,
-                balance=balance,
-                snapshot_date=date.today(),
-            )
-            db.add(snap)
+            today = date.today()
+            existing_snap = db.query(NetWorthSnapshot).filter(
+                NetWorthSnapshot.account_id == local_acct.id,
+                NetWorthSnapshot.snapshot_date == today,
+            ).first()
+            if existing_snap:
+                existing_snap.balance = balance
+            else:
+                snap = NetWorthSnapshot(
+                    account_id=local_acct.id,
+                    balance=balance,
+                    snapshot_date=date.today(),
+                )
+                db.add(snap)
 
     # ── 2. Sync transactions (with retry for PRODUCT_NOT_READY) ──────────────
     end_date = date.today()
@@ -246,7 +254,7 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
 
         merchant = t.get("merchant_name") or t["description"]
         # Detect transfers via Plaid's category hint
-        plaid_cats = t.get("plaid_category", [])
+        plaid_cats = t.get("plaid_category") or []
         is_transfer = any(
             c.lower() in ("transfer", "payment", "deposit", "internal account transfer")
             for c in plaid_cats
@@ -272,7 +280,7 @@ async def _sync_item(item: PlaidItem, db: Session, days_back: int = 90) -> Plaid
     if new_ids:
         await categorize_transactions(new_ids, db)
 
-    item.last_synced = datetime.utcnow()
+    item.last_synced = datetime.now(timezone.utc)
 
     return PlaidSyncResult(
         institution_name=item.institution_name or "Unknown",

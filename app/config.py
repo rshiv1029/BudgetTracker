@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Plaid Configuration
     plaid_client_id: str = ""
     plaid_secret: str = ""
-    plaid_env: str = "sandbox"  # sandbox, development, or production
+    plaid_env: str = "development"  # sandbox, development, or production
 
     # AI Configuration
     ai_api_key: str = ""
@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 @lru_cache()

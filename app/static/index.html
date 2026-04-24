@@ -194,6 +194,7 @@
           x-show="page==='dashboard'"
           x-data="dashboardApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'dashboard') load()"
           x-cloak
           class="page-enter"
         >
@@ -392,6 +393,7 @@
           x-show="page==='transactions'"
           x-data="transactionsApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'transactions') load()"
           x-cloak
           class="page-enter"
         >
@@ -590,6 +592,7 @@
           x-show="page==='accounts'"
           x-data="accountsApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'accounts') load()"
           x-cloak
           class="page-enter"
         >
@@ -989,6 +992,7 @@
           x-show="page==='budgets'"
           x-data="budgetsApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'budgets') load()"
           x-cloak
           class="page-enter"
         >
@@ -1211,6 +1215,7 @@
           x-show="page==='networth'"
           x-data="netWorthApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'networth') load()"
           x-cloak
           class="page-enter"
         >
@@ -1683,6 +1688,7 @@
           x-show="page==='recurring'"
           x-data="recurringApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'recurring') load()"
           x-cloak
           class="page-enter"
         >
@@ -2083,6 +2089,7 @@
           x-show="page==='forecast'"
           x-data="forecastApp()"
           x-init="init()"
+          @page-changed.window="if($event.detail === 'forecast') load()"
           x-cloak
           class="page-enter"
         >
