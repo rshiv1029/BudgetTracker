@@ -46,8 +46,8 @@ def add_snapshot(snap: SnapshotCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/history", response_model=list[NetWorthPoint])
-def get_history(db: Session = Depends(get_db)):
-    rows = net_worth_history(db)
+def get_history(months: int = 12,db: Session = Depends(get_db)):
+    rows = net_worth_history(db, months=months)
     return [NetWorthPoint(snapshot_date=r["date"], total=r["total"]) for r in rows]
 
 

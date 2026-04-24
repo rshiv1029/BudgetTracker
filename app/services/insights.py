@@ -65,13 +65,14 @@ def top_merchants(month_year: Optional[str], limit: int, db: Session) -> list[di
     """), params).fetchall()
     return [{"merchant": r[0], "category": r[1], "total": round(r[2], 2), "count": r[3]} for r in rows]
 
-def net_worth_history(db: Session) -> list[dict]:
+def net_worth_history(db: Session, months: int=12) -> list[dict]:
     rows = db.execute(text("""
         SELECT snapshot_date, SUM(balance) AS total
         FROM net_worth_snapshots
+        WHERE snapshot_date >= date('now', :offset)
         GROUP BY snapshot_date
         ORDER BY snapshot_date ASC
-    """)).fetchall()
+    """), {"offset": f"-{months} months"}).fetchall()
     return [{"date": str(r[0]), "total": round(r[1], 2)} for r in rows]
 
 
@@ -91,4 +92,17 @@ def category_breakdown(month_year: Optional[str], db: Session) -> list[dict]:
         GROUP BY category
         ORDER BY total DESC
     """), params).fetchall()
+    return [{"category": r[0], "total": round(r[1], 2)} for r in rows]
+
+def category_breakdown_months(months: int, db: Session) -> list[dict]:
+    rows = db.execute(text(f"""
+        SELECT category, ABS(SUM(amount)) AS total
+        FROM transactions
+        WHERE amount < 0
+          AND is_excluded = 0
+          AND is_transfer = 0
+          AND date >= date('now', :offset)
+        GROUP BY category
+        ORDER BY total DESC
+    """), {"offset": f"-{months} months"}).fetchall()
     return [{"category": r[0], "total": round(r[1], 2)} for r in rows]

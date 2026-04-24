@@ -159,10 +159,16 @@ function dashboardApp() {
     budgetStatus: [],
     loading: true,
     month_year: currentMonthYear(),
+    monthsRange: 3,
     charts: {},
     _loading: false,
 
     async init() {
+      await this.load();
+    },
+
+    async setRange(months) {
+      this.monthsRange = months;
       await this.load();
     },
 
@@ -171,7 +177,7 @@ function dashboardApp() {
       this._loading = true;
       try {
         const [ins, budgets] = await Promise.all([
-          api.get("/api/ai/insights?months=3"),
+          api.get(`/api/ai/insights?months=${this.monthsRange}`),
           api.get(`/api/budgets/status?month_year=${this.month_year}`),
         ]);
         this.insights = ins;
@@ -191,19 +197,23 @@ function dashboardApp() {
       }
     },
 
-    get currentMonthData() {
-      if (!this.insights) return null;
-      const rows = this.insights.income_vs_expenses;
-      return rows && rows.length ? rows[rows.length - 1] : null;
-    },
+    // get currentMonthData() {
+    //   if (!this.insights) return null;
+    //   const rows = this.insights.income_vs_expenses;
+    //   return rows && rows.length ? rows[rows.length - 1] : null;
+    // },
 
     get totalIncome() {
-      return this.currentMonthData?.income ?? 0;
+      if(!this.insights) return 0;
+      const rows = this.insights.income_vs_expenses || [];
+      return rows.reduce((s, r) => s + (r.income || 0), 0);
     },
     get totalExpenses() {
-      return this.currentMonthData?.expenses ?? 0;
+      if(!this.insights) return 0;
+      const rows = this.insights.income_vs_expenses || [];
+      return rows.reduce((s, r) => s + (r.expenses || 0), 0);
     },
-    get netThisMonth() {
+    get netTotal() {
       return this.totalIncome - this.totalExpenses;
     },
 
@@ -691,8 +701,14 @@ function netWorthApp() {
     showAcctForm: false,
     chart: null,
     loading: true,
+    monthsRange: 12,
 
     async init() {
+      await this.load();
+    },
+
+    async setRange(months) {
+      this.monthsRange = months;
       await this.load();
     },
 
@@ -700,7 +716,7 @@ function netWorthApp() {
       this.loading = true;
       const [latest, history, accounts] = await Promise.all([
         api.get("/api/net-worth/latest"),
-        api.get("/api/net-worth/history"),
+        api.get(`/api/net-worth/history?months=${this.monthsRange}`),
         api.get("/api/net-worth/accounts"),
       ]);
       this.latest = latest;

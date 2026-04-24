@@ -852,3 +852,35 @@ html, body {
 }
 
 .text-amber { color: var(--amber); }
+
+/* Time Range Selector */
+.time-range-selector {
+  display: flex;
+  gap: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.range-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.range-btn:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.range-btn.active {
+  background: var(--blue);
+  color: white;
+}

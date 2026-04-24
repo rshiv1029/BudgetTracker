@@ -137,10 +137,12 @@ async def ai_query(req: AIQueryRequest, db: Session = Depends(get_db)):
 @router.get("/insights")
 def get_insights(months: int = 3, db: Session = Depends(get_db)):
     """Quick aggregated insights for the dashboard."""
+    from app.services.insights import category_breakdown_months
     today = date.today()
     month_year = today.strftime("%Y-%m")
     return {
-        "category_breakdown": category_breakdown(month_year, db),
+        "category_breakdown": category_breakdown_months(months, db),
         "income_vs_expenses": monthly_income_vs_expenses(months, db),
         "top_merchants": top_merchants(month_year, 5, db),
+        "months": months
     }
