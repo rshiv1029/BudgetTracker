@@ -203,34 +203,34 @@
               <div class="page-title">Dashboard</div>
               <div
                 class="page-subtitle"
-                x-text="'Showing data for last ' + monthsrange + ' month' + (monthsRange > 1 ? 's' :'')"
+                x-text="'Showing data for last ' + monthsRange + ' month' + (monthsRange > 1 ? 's' :'')"
               ></div>
             </div>
             <div class="time-range-selector">
               <button
                 class="range-btn"
-                :class="monthsrange === 1 && 'active'"
+                :class="monthsRange === 1 && 'active'"
                 @click="setRange(1)"
               >
                 1M
               </button>
               <button
                 class="range-btn"
-                :class="monthsrange === 3 && 'active'"
+                :class="monthsRange === 3 && 'active'"
                 @click="setRange(3)"
               >
                 3M
               </button>
               <button
                 class="range-btn"
-                :class="monthsrange === 6 && 'active'"
+                :class="monthsRange === 6 && 'active'"
                 @click="setRange(6)"
               >
                 6M
               </button>
               <button
                 class="range-btn"
-                :class="monthsrange === 12 && 'active'"
+                :class="monthsRange === 12 && 'active'"
                 @click="setRange(12)"
               >
                 12M
@@ -256,7 +256,7 @@
               <div class="stat-grid">
                 <div class="stat-card">
                   <div class="stat-glow green"></div>
-                  <div class="stat-label" x-text="'Total Income (' + monthsrange + (monthsRange > 1 ? ' months' : ' month') + ')'""></div>
+                  <div class="stat-label" x-text="'Total Income (' + monthsRange + (monthsRange > 1 ? ' months' : ' month') + ')'"></div>
                   <div
                     class="stat-value income amount"
                     x-text="fmtAbs(totalIncome)"
@@ -265,7 +265,7 @@
                 </div>
                 <div class="stat-card">
                   <div class="stat-glow red"></div>
-                  <div class="stat-label" x-text="'Total Expenses (' + monthsrange + (monthsRange > 1 ? ' months' : ' month') + ')'""></div>
+                  <div class="stat-label" x-text="'Total Expenses (' + monthsRange + (monthsRange > 1 ? ' months' : ' month') + ')'"></div>
                   <div
                     class="stat-value expense amount"
                     x-text="fmtAbs(totalExpenses)"
@@ -274,7 +274,7 @@
                 </div>
                 <div class="stat-card">
                   <div class="stat-glow blue"></div>
-                  <div class="stat-label" x-text="'Net ' + (monthsrange > 1 ? monthsrange + ' Months' : 'This Month')""></div>
+                  <div class="stat-label" x-text="'Net ' + (monthsRange > 1 ? monthsRange + ' Months' : 'This Month')"></div>
                   <div
                     class="stat-value amount"
                     :class="netTotal >= 0 ? 'net-pos' : 'net-neg'"
@@ -1258,10 +1258,10 @@
             </div>
             <div class="flex items-center gap-3">
               <div class="time-range-selector">
-                <button class=""range-btn" :class="monthsRange === 1 && 'active'" @click="setRange(1)">1M</button>
-                <button class=""range-btn" :class="monthsRange === 3 && 'active'" @click="setRange(3)">3M</button>
-                <button class=""range-btn" :class="monthsRange === 6 && 'active'" @click="setRange(6)">6M</button>
-                <button class=""range-btn" :class="monthsRange === 12 && 'active'" @click="setRange(12)">1Y</button>
+                <button class="range-btn" :class="monthsRange === 1 && 'active'" @click="setRange(1)">1M</button>
+                <button class="range-btn" :class="monthsRange === 3 && 'active'" @click="setRange(3)">3M</button>
+                <button class="range-btn" :class="monthsRange === 6 && 'active'" @click="setRange(6)">6M</button>
+                <button class="range-btn" :class="monthsRange === 12 && 'active'" @click="setRange(12)">1Y</button>
               </div>
               <button
                 @click="showAcctForm = !showAcctForm"
